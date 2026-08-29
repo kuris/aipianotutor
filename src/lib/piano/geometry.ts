@@ -56,28 +56,10 @@ export interface KeyRange {
   end: number;
 }
 
-export function songRange(pitches: number[]): KeyRange {
-  if (pitches.length === 0) return { start: 48, end: 84 };
-  const min = Math.min(...pitches);
-  const max = Math.max(...pitches);
-  let start = min;
-  while (isBlackKey(start) || start > 21) {
-    if (isWhiteKey(start) && start <= min - 2) break;
-    start--;
-    if (start < 21) {
-      start = 21;
-      break;
-    }
-  }
-  while (isBlackKey(start) && start > 21) start--;
-  let end = max;
-  while (end < 108 && (isBlackKey(end) || end < max + 2)) {
-    end++;
-  }
-  while (isBlackKey(end) && end < 108) end++;
-  start = Math.max(24, Math.min(start, min));
-  end = Math.min(96, Math.max(end, max));
-  return { start, end };
+export const FULL_88_KEY_RANGE: KeyRange = { start: 21, end: 108 };
+
+export function songRange(pitches?: number[]): KeyRange {
+  return FULL_88_KEY_RANGE;
 }
 
 /** Rest offsets in white-key units from palm center. Thumb is toward the body (inner). */

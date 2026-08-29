@@ -437,8 +437,8 @@ export function PianoStage({ frame, range }: { frame: LessonFrame; range: KeyRan
 
   return (
     <div className="relative flex h-full max-w-full flex-col overflow-hidden rounded-xl border border-border bg-card">
-      <div className="pointer-events-none absolute top-3 left-4 z-10 text-[11px] tracking-wide text-muted-foreground">
-        연주자 시점 · 양손이 건반 아래쪽에서 올라갑니다
+      <div className="pointer-events-none absolute top-3 left-4 z-10 text-[11px] tracking-wide text-muted-foreground font-semibold">
+        ✨ 88건반 전체 피아노 · 연주자 2D 시점
       </div>
       <div className="pointer-events-none absolute bottom-3 left-4 z-10 text-[11px] tracking-wide text-lh">
         왼손 {frame.left.active ? "연주" : frame.left.preparing ? "다음 자리 준비" : "대기"}
