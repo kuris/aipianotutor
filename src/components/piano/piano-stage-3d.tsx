@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { Maximize2, Minimize2, UserCheck, UserX } from "lucide-react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import {
   fingerHomePitches,
   isBlackKey,
@@ -20,11 +19,11 @@ interface PianoStage3DProps {
 const PIANO_START_KEY = 21;
 const PIANO_END_KEY = 108;
 
-// 3D Specific Geometry
-const KEY_3D_WHITE_W = 16.5;
-const KEY_3D_BLACK_W = 9.8;
-const KEY_3D_WHITE_H = 105;
-const KEY_3D_BLACK_H = 66;
+// 3D Concert Piano Dimensions
+const KEY_3D_WHITE_W = 16;
+const KEY_3D_BLACK_W = 9.6;
+const KEY_3D_WHITE_H = 100;
+const KEY_3D_BLACK_H = 64;
 
 function get3DKeyCenterX(pitch: number): number {
   let whiteCount = 0;
@@ -37,8 +36,8 @@ function get3DKeyCenterX(pitch: number): number {
   return whiteCount * KEY_3D_WHITE_W;
 }
 
-const TOTAL_88_WIDTH = 52 * KEY_3D_WHITE_W; // ~858
-const CENTER_88_OFFSET = get3DKeyCenterX(60); // Center around Middle C (C4)
+const TOTAL_88_WIDTH = 52 * KEY_3D_WHITE_W; // ~832
+const CENTER_88_OFFSET = get3DKeyCenterX(60); // Centered at Middle C (C4)
 
 const KNUCKLE_DX: Record<Finger, number> = {
   1: -13,
@@ -68,7 +67,6 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showAvatar, setShowAvatar] = useState(true);
 
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer;
@@ -80,12 +78,11 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     lhGroup: THREE.Group;
     rhFingers: Map<Finger, THREE.Group>;
     lhFingers: Map<Finger, THREE.Group>;
-    pianistAvatarGroup: THREE.Group;
     cameraTargetPos?: THREE.Vector3;
     controlsTargetPos?: THREE.Vector3;
   } | null>(null);
 
-  const [viewAngle, setViewAngle] = useState<"custom" | "anime_side" | "cinematic" | "player" | "top">("anime_side");
+  const [viewAngle, setViewAngle] = useState<"custom" | "cinematic" | "side" | "player" | "top">("cinematic");
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -129,13 +126,13 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
 
     // 1. Scene Setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x151821);
-    scene.fog = new THREE.FogExp2(0x151821, 0.0007);
+    scene.background = new THREE.Color(0x0c0e14); // Deep concert navy-black
+    scene.fog = new THREE.FogExp2(0x0c0e14, 0.0007);
 
-    // Camera: Framed for full 88-key grand piano visibility
-    const camera = new THREE.PerspectiveCamera(36, width / height, 1, 3500);
-    camera.position.set(-220, 110, 210);
-    camera.lookAt(20, 15, -20);
+    // Camera: Grand Concert 3/4 Golden Angle
+    const camera = new THREE.PerspectiveCamera(40, width / height, 1, 3500);
+    camera.position.set(280, 180, 260);
+    camera.lookAt(-10, 15, -20);
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -144,16 +141,16 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.25;
+    renderer.toneMappingExposure = 1.3;
     container.appendChild(renderer.domElement);
 
-    // 2. Lighting
+    // 2. Concert Lighting
     const ambientLight = new THREE.AmbientLight(0xffeedd, 1.6);
     scene.add(ambientLight);
 
-    const mainSpot = new THREE.SpotLight(0xfffaee, 3.6, 2200, Math.PI / 3.2, 0.45, 1.2);
-    mainSpot.position.set(-150, 480, 320);
-    mainSpot.target.position.set(0, 0, -40);
+    const mainSpot = new THREE.SpotLight(0xfffaee, 3.8, 2200, Math.PI / 3.4, 0.45, 1.2);
+    mainSpot.position.set(260, 480, 300);
+    mainSpot.target.position.set(0, 0, -30);
     mainSpot.castShadow = true;
     mainSpot.shadow.mapSize.width = 2048;
     mainSpot.shadow.mapSize.height = 2048;
@@ -161,20 +158,20 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     scene.add(mainSpot);
     scene.add(mainSpot.target);
 
-    const harpGoldLight = new THREE.PointLight(0xffc244, 2.2, 800);
-    harpGoldLight.position.set(-80, 120, -200);
+    const harpGoldLight = new THREE.PointLight(0xffc244, 2.4, 700);
+    harpGoldLight.position.set(-80, 130, -180);
     scene.add(harpGoldLight);
 
-    const rimCoolLight = new THREE.DirectionalLight(0xa5c0ed, 1.4);
-    rimCoolLight.position.set(340, 240, -220);
+    const rimCoolLight = new THREE.DirectionalLight(0x8faee8, 1.4);
+    rimCoolLight.position.set(-300, 220, -240);
     scene.add(rimCoolLight);
 
     // 3. Stage Floor
     const floorGeo = new THREE.PlaneGeometry(3500, 3500);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x181c24,
-      roughness: 0.38,
-      metalness: 0.12,
+      color: 0x181512,
+      roughness: 0.36,
+      metalness: 0.15,
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
@@ -182,14 +179,14 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // 4. Concert Grand Piano (Full 88-Key Scale)
+    // 4. Concert Grand Piano
     const pianoGroup = new THREE.Group();
     scene.add(pianoGroup);
 
     const blackGlossMat = new THREE.MeshStandardMaterial({
-      color: 0x101216,
-      roughness: 0.18,
-      metalness: 0.85,
+      color: 0x090a0d,
+      roughness: 0.12,
+      metalness: 0.88,
     });
 
     const goldHarpMat = new THREE.MeshStandardMaterial({
@@ -210,14 +207,14 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       metalness: 0.95,
     });
 
-    // Grand Piano Rim Shape for 88 Keys
-    const halfW = TOTAL_88_WIDTH / 2 + 35; // ~464
+    // Grand Piano Rim Shape
+    const halfW = TOTAL_88_WIDTH / 2 + 35; // ~451
     const rimShape = new THREE.Shape();
     rimShape.moveTo(-halfW, 0);
     rimShape.lineTo(halfW, 0);
-    rimShape.lineTo(halfW, -110);
-    rimShape.bezierCurveTo(halfW, -380, halfW * 0.35, -680, -halfW * 0.35, -740);
-    rimShape.bezierCurveTo(-halfW * 0.85, -710, -halfW, -520, -halfW, 0);
+    rimShape.lineTo(halfW, -100);
+    rimShape.bezierCurveTo(halfW, -360, halfW * 0.35, -650, -halfW * 0.35, -720);
+    rimShape.bezierCurveTo(-halfW * 0.85, -690, -halfW, -500, -halfW, 0);
 
     const rimExtrude = new THREE.ExtrudeGeometry(rimShape, {
       depth: 90,
@@ -242,24 +239,24 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     pianoGroup.add(soundboard);
 
     // Gold Cast-Iron Plate
-    const harpPlateGeo = new THREE.BoxGeometry(halfW * 1.6, 6, 420);
+    const harpPlateGeo = new THREE.BoxGeometry(halfW * 1.55, 6, 400);
     const harpPlate = new THREE.Mesh(harpPlateGeo, goldHarpMat);
-    harpPlate.position.set(-15, -8, -320);
+    harpPlate.position.set(-15, -8, -300);
     pianoGroup.add(harpPlate);
 
     for (let i = 0; i < 6; i++) {
-      const ribGeo = new THREE.CylinderGeometry(4.0, 5.0, 360 - i * 36, 12);
+      const ribGeo = new THREE.CylinderGeometry(4.0, 5.0, 340 - i * 34, 12);
       ribGeo.rotateZ(Math.PI / 2);
       ribGeo.rotateY(0.24 + i * 0.08);
       const rib = new THREE.Mesh(ribGeo, goldHarpMat);
-      rib.position.set(-halfW * 0.6 + i * 68, -4, -200 - i * 48);
+      rib.position.set(-halfW * 0.6 + i * 65, -4, -190 - i * 45);
       pianoGroup.add(rib);
     }
 
     // Strings
     for (let s = 0; s < 48; s++) {
-      const sx = -halfW * 0.8 + s * 16;
-      const sLen = 480 - Math.abs(s - 10) * 5;
+      const sx = -halfW * 0.8 + s * 15.5;
+      const sLen = 460 - Math.abs(s - 10) * 5;
       const strGeo = new THREE.CylinderGeometry(0.5, 0.5, sLen, 4);
       strGeo.rotateX(Math.PI / 2);
       const strMesh = new THREE.Mesh(strGeo, stringMat);
@@ -281,7 +278,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     pianoGroup.add(lidGroup);
 
     // Music Desk (보면대)
-    const musicDeskGeo = new THREE.BoxGeometry(340, 42, 6);
+    const musicDeskGeo = new THREE.BoxGeometry(320, 38, 6);
     const musicDesk = new THREE.Mesh(musicDeskGeo, blackGlossMat);
     musicDesk.position.set(0, 32, -45);
     musicDesk.rotation.x = -0.32;
@@ -290,7 +287,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
 
     // Piano Legs
     const legGeo = new THREE.CylinderGeometry(11, 8, 95, 16);
-    [[-halfW * 0.9, -48, -40], [halfW * 0.9, -48, -40], [-halfW * 0.3, -48, -660]].forEach(([lx, ly, lz]) => {
+    [[-halfW * 0.9, -48, -40], [halfW * 0.9, -48, -40], [-halfW * 0.3, -48, -640]].forEach(([lx, ly, lz]) => {
       const leg = new THREE.Mesh(legGeo, blackGlossMat);
       leg.position.set(lx, ly, lz);
       leg.castShadow = true;
@@ -329,57 +326,21 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     }
 
     // 5. Concert Bench Group
-    const benchGeo = new THREE.BoxGeometry(320, 14, 90);
+    const benchGeo = new THREE.BoxGeometry(300, 14, 85);
     const benchTop = new THREE.Mesh(benchGeo, blackGlossMat);
     benchTop.position.set(0, -32, 105);
     benchTop.castShadow = true;
     pianoGroup.add(benchTop);
 
     const benchLegGeo = new THREE.CylinderGeometry(4.5, 3.5, 65, 12);
-    [[-130, -64, 75], [130, -64, 75], [-130, -64, 135], [130, -64, 135]].forEach(([bx, by, bz]) => {
+    [[-120, -64, 75], [120, -64, 75], [-120, -64, 135], [120, -64, 135]].forEach(([bx, by, bz]) => {
       const bLeg = new THREE.Mesh(benchLegGeo, blackGlossMat);
       bLeg.position.set(bx, by, bz);
       bLeg.castShadow = true;
       pianoGroup.add(bLeg);
     });
 
-    // 6. Real 3D Anime Girl Model (GLTF/GLB)
-    const pianistAvatarGroup = new THREE.Group();
-    pianistAvatarGroup.position.set(0, -30, 95);
-    pianoGroup.add(pianistAvatarGroup);
-
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.load(
-      "/models/anime_girl.glb",
-      (gltf) => {
-        const model = gltf.scene;
-
-        const bbox = new THREE.Box3().setFromObject(model);
-        const size = new THREE.Vector3();
-        bbox.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scaleFactor = 110 / (maxDim || 1);
-
-        model.scale.set(scaleFactor, scaleFactor, scaleFactor);
-        model.rotation.y = Math.PI;
-        model.position.set(0, 0, 0);
-
-        model.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-
-        pianistAvatarGroup.add(model);
-      },
-      undefined,
-      (err) => {
-        console.warn("Anime girl model load fallback:", err);
-      },
-    );
-
-    // 7. Natural Virtuoso 3D Hands on Keyboard
+    // 6. Natural Virtuoso 3D Hands on Keyboard
     const skinMat = new THREE.MeshStandardMaterial({
       color: 0xffe2d2,
       roughness: 0.48,
@@ -448,14 +409,14 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     const rh = createVirtuosoPianoHand("R");
     const lh = createVirtuosoPianoHand("L");
 
-    // 8. OrbitControls
+    // 7. OrbitControls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
     controls.minDistance = 40;
     controls.maxDistance = 1400;
     controls.maxPolarAngle = Math.PI / 2 + 0.04;
-    controls.target.set(20, 15, -20);
+    controls.target.set(-10, 15, -20);
 
     controls.addEventListener("start", () => {
       setViewAngle("custom");
@@ -471,7 +432,6 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       lhGroup: lh.handGroup,
       rhFingers: rh.fingers,
       lhFingers: lh.fingers,
-      pianistAvatarGroup,
     };
 
     // Resize Handler
@@ -522,29 +482,22 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     };
   }, []);
 
-  // Update Avatar Visibility
-  useEffect(() => {
-    if (stateRef.current?.pianistAvatarGroup) {
-      stateRef.current.pianistAvatarGroup.visible = showAvatar;
-    }
-  }, [showAvatar]);
-
   // Update Camera Angle Presets
   useEffect(() => {
     const s = stateRef.current;
     if (!s || viewAngle === "custom") return;
 
-    if (viewAngle === "anime_side") {
-      s.cameraTargetPos = new THREE.Vector3(-220, 110, 210);
-      s.controlsTargetPos = new THREE.Vector3(20, 15, -20);
-    } else if (viewAngle === "cinematic") {
-      s.cameraTargetPos = new THREE.Vector3(280, 160, 240);
+    if (viewAngle === "cinematic") {
+      s.cameraTargetPos = new THREE.Vector3(280, 180, 260);
       s.controlsTargetPos = new THREE.Vector3(-10, 15, -20);
+    } else if (viewAngle === "side") {
+      s.cameraTargetPos = new THREE.Vector3(380, 95, 60);
+      s.controlsTargetPos = new THREE.Vector3(-10, 10, -20);
     } else if (viewAngle === "player") {
       s.cameraTargetPos = new THREE.Vector3(0, 110, 180);
       s.controlsTargetPos = new THREE.Vector3(0, 0, -20);
     } else if (viewAngle === "top") {
-      s.cameraTargetPos = new THREE.Vector3(0, 300, 30);
+      s.cameraTargetPos = new THREE.Vector3(0, 320, 30);
       s.controlsTargetPos = new THREE.Vector3(0, 0, -20);
     }
   }, [viewAngle]);
@@ -576,20 +529,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       }
     });
 
-    // 2. Avatar Gentle Sway & Position Alignment
-    const activeRightPitch = frame.right.fingers[0]?.pitch ?? (frame.right.restPitches[2] ?? 60);
-    const activeLeftPitch = frame.left.fingers[0]?.pitch ?? (frame.left.restPitches[2] ?? 48);
-    const centerTargetX = (get3DKeyCenterX(activeRightPitch) + get3DKeyCenterX(activeLeftPitch)) / 2 - CENTER_88_OFFSET;
-
-    const strikeMax = Math.max(frame.right.strikeImpact ?? 0, frame.left.strikeImpact ?? 0);
-
-    if (s.pianistAvatarGroup) {
-      s.pianistAvatarGroup.position.x += (centerTargetX * 0.4 - s.pianistAvatarGroup.position.x) * 0.05;
-      s.pianistAvatarGroup.rotation.z = -centerTargetX * 0.0003;
-      s.pianistAvatarGroup.rotation.x = -strikeMax * 0.02;
-    }
-
-    // 3. Hand Kinematics across 88 keys
+    // 2. Hand Kinematics across 88 keys
     function updateHandPose(
       pose: HandFrame,
       handGroup: THREE.Group,
@@ -634,8 +574,13 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     updateHandPose(frame.left, s.lhGroup, s.lhFingers);
 
     // Gentle camera tracking to active playing hand region
-    if (viewAngle === "anime_side" && !s.cameraTargetPos) {
-      s.controls.target.x += (20 + centerTargetX * 0.2 - s.controls.target.x) * 0.04;
+    const activeRightPitch = frame.right.fingers[0]?.pitch ?? (frame.right.restPitches[2] ?? 60);
+    const activeLeftPitch = frame.left.fingers[0]?.pitch ?? (frame.left.restPitches[2] ?? 48);
+    const centerTargetX = (get3DKeyCenterX(activeRightPitch) + get3DKeyCenterX(activeLeftPitch)) / 2 - CENTER_88_OFFSET;
+
+    if (viewAngle === "cinematic" && !s.cameraTargetPos) {
+      s.camera.position.x += (280 + centerTargetX * 0.18 - s.camera.position.x) * 0.04;
+      s.controls.target.x += (-10 + centerTargetX * 0.25 - s.controls.target.x) * 0.04;
     }
   }, [frame, range, viewAngle]);
 
@@ -648,18 +593,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     >
       {/* 3D Camera Angles & Controls Bar */}
       <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/85 px-2.5 py-1.5 shadow-md backdrop-blur-md">
-        <span className="text-[11px] font-semibold text-muted-foreground mr-1">🎥 시점:</span>
-        <button
-          type="button"
-          onClick={() => setViewAngle("anime_side")}
-          className={`rounded px-2 py-1 text-xs transition-all ${
-            viewAngle === "anime_side"
-              ? "bg-primary text-primary-foreground font-bold shadow-xs"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          ✨ 애니메 측면
-        </button>
+        <span className="text-[11px] font-semibold text-muted-foreground mr-1">🎥 카메라:</span>
         <button
           type="button"
           onClick={() => setViewAngle("cinematic")}
@@ -670,6 +604,17 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
           }`}
         >
           시네마틱
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewAngle("side")}
+          className={`rounded px-2 py-1 text-xs transition-all ${
+            viewAngle === "side"
+              ? "bg-primary text-primary-foreground font-bold shadow-xs"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          사이드 뷰
         </button>
         <button
           type="button"
@@ -701,30 +646,6 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
 
         <div className="mx-1 h-3.5 w-px bg-border" />
 
-        {/* Toggle Avatar Visibility Button */}
-        <button
-          type="button"
-          onClick={() => setShowAvatar(!showAvatar)}
-          title={showAvatar ? "캐릭터 아바타 숨기기 (피아노 전용 뷰)" : "캐릭터 아바타 표시"}
-          className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold transition-all ${
-            showAvatar ? "bg-primary/20 text-primary border border-primary/30" : "bg-muted/60 text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {showAvatar ? (
-            <>
-              <UserCheck className="size-3.5" />
-              <span>캐릭터 ON</span>
-            </>
-          ) : (
-            <>
-              <UserX className="size-3.5" />
-              <span>캐릭터 OFF</span>
-            </>
-          )}
-        </button>
-
-        <div className="mx-1 h-3.5 w-px bg-border" />
-
         {/* Fullscreen Toggle Button */}
         <button
           type="button"
@@ -747,7 +668,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       </div>
 
       <div className="pointer-events-none absolute top-3 left-4 z-10 flex flex-col gap-0.5 text-[11px] font-medium tracking-wide text-muted-foreground">
-        <span className="text-white/90 font-semibold">✨ 88건반 콘서트 그랜드 피아노 & 피아니스트 연주</span>
+        <span className="text-white/90 font-semibold">✨ 88건반 콘서트 그랜드 피아노 & 피아노 연주</span>
         <span className="text-[10px] text-neutral-400">
           🖱️ 마우스 드래그: 360° 회전 · 휠: 확대/축소 · 우클릭: 이동
         </span>
