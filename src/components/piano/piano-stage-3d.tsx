@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { Maximize2, Minimize2 } from "lucide-react";
 import {
   BLACK_KEY_H,
   BLACK_KEY_W,
@@ -45,7 +46,9 @@ const FINGER_SPECS: Record<Finger, { radius: number; lengths: [number, number, n
 };
 
 export function PianoStage3D({ frame, range }: PianoStage3DProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer;
     scene: THREE.Scene;
@@ -72,6 +75,39 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
   } | null>(null);
 
   const [viewAngle, setViewAngle] = useState<"custom" | "cinematic" | "side" | "player" | "top">("cinematic");
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+      setTimeout(() => {
+        if (!containerRef.current || !stateRef.current) return;
+        const w = containerRef.current.clientWidth;
+        const h = containerRef.current.clientHeight;
+        stateRef.current.camera.aspect = w / h;
+        stateRef.current.camera.updateProjectionMatrix();
+        stateRef.current.renderer.setSize(w, h);
+      }, 50);
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => document.removeEventListener("fullscreenchange", handleFsChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    if (!rootRef.current) return;
+    if (!document.fullscreenElement) {
+      try {
+        await rootRef.current.requestFullscreen();
+      } catch (e) {
+        console.error("Fullscreen error:", e);
+      }
+    } else {
+      try {
+        await document.exitFullscreen();
+      } catch (e) {
+        console.error("Exit fullscreen error:", e);
+      }
+    }
+  };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -702,7 +738,12 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
   }, [frame, range, viewAngle]);
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+    <div
+      ref={rootRef}
+      className={`relative flex h-full w-full flex-col overflow-hidden bg-card shadow-2xl transition-all ${
+        isFullscreen ? "fixed inset-0 z-50 rounded-none border-none" : "rounded-xl border border-border"
+      }`}
+    >
       {/* 3D Camera Angles Bar */}
       <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/85 px-2.5 py-1.5 shadow-md backdrop-blur-md">
         <span className="text-[11px] font-semibold text-muted-foreground mr-1">🎥 카메라:</span>
@@ -755,6 +796,28 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
             자유 시점
           </span>
         )}
+
+        <div className="mx-1 h-3.5 w-px bg-border" />
+
+        {/* Fullscreen Toggle Button */}
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "창 모드로 복귀 (ESC)" : "3D 피아노 전체 화면"}
+          className="flex items-center gap-1 rounded bg-muted/60 hover:bg-muted px-2 py-1 text-xs font-semibold text-foreground transition-all"
+        >
+          {isFullscreen ? (
+            <>
+              <Minimize2 className="size-3.5 text-amber-400" />
+              <span>창 모드</span>
+            </>
+          ) : (
+            <>
+              <Maximize2 className="size-3.5 text-neutral-300" />
+              <span>전체 화면</span>
+            </>
+          )}
+        </button>
       </div>
 
       <div className="pointer-events-none absolute top-3 left-4 z-10 flex flex-col gap-0.5 text-[11px] font-medium tracking-wide text-muted-foreground">
