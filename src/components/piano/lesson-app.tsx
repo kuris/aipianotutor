@@ -29,6 +29,8 @@ function loadInitial(): Lesson {
 export function LessonApp() {
   const [lesson, setLesson] = useState<Lesson>(loadInitial);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const player = useLessonPlayer(lesson);
 
@@ -43,34 +45,83 @@ export function LessonApp() {
     if (!file) return;
     try {
       setError(null);
+      setLoading(true);
+      // Give UI a moment to show loading state
+      await new Promise((r) => setTimeout(r, 20));
+
       const parsed = await parseMidiFile(file);
-      if (parsed.notes.length === 0) {
-        setError("음표를 찾지 못했습니다. 피아노 솔로 MIDI를 올려 주세요.");
+      if (!parsed.notes || parsed.notes.length === 0) {
+        setError("MIDI 파일에서 유효한 음표를 찾지 못했습니다. 다른 피아노 악보 MIDI 파일을 시도해 주세요.");
+        setLoading(false);
         return;
       }
-      setLesson(
-        buildLessonFromNotes(
-          {
-            id: `midi-${file.name}`,
-            title: parsed.title,
-            titleKo: parsed.title,
-            composer: "업로드한 MIDI",
-            bpm: Math.round(parsed.bpm),
-            timeSignature: parsed.timeSignature,
-            description: "업로드한 악보에서 양손 운지와 손 이동 경로를 계산했습니다.",
-            teach: "자동 운지",
-            source: "midi",
-          },
-          parsed.notes,
-        ),
+
+      const songTitle = parsed.title && parsed.title !== "MIDI" ? parsed.title : file.name.replace(/\.(mid|midi)$/i, "");
+      const newLesson = buildLessonFromNotes(
+        {
+          id: `midi-${Date.now()}`,
+          title: songTitle,
+          titleKo: songTitle,
+          composer: "업로드한 MIDI",
+          bpm: Math.round(parsed.bpm) || 120,
+          timeSignature: parsed.timeSignature || [4, 4],
+          description: `총 ${parsed.notes.length}개의 음표에서 양손 운지와 손 이동 경로를 계산했습니다.`,
+          teach: "자동 운지",
+          source: "midi",
+        },
+        parsed.notes,
       );
-    } catch {
-      setError("MIDI를 읽지 못했습니다. 다른 파일을 시도해 주세요.");
+
+      setLesson(newLesson);
+      player.stop();
+    } catch (err) {
+      console.error("MIDI parse error:", err);
+      const msg = err instanceof Error ? err.message : "알 수 없는 오류";
+      setError(`MIDI 파일을 읽는 중 오류가 발생했습니다: ${msg}`);
+    } finally {
+      setLoading(false);
     }
   }
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      onFile(files[0]);
+    }
+  };
+
   return (
-    <div className="flex min-h-dvh flex-col overflow-x-hidden bg-background text-foreground lg:h-dvh lg:overflow-y-auto">
+    <div
+      className="relative flex min-h-dvh flex-col overflow-x-hidden bg-background text-foreground lg:h-dvh lg:overflow-y-auto"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary">
+          <div className="flex flex-col items-center gap-2 rounded-xl bg-card p-6 shadow-2xl border border-border text-center">
+            <Upload className="size-10 text-primary animate-bounce" />
+            <p className="text-lg font-semibold">여기에 MIDI 파일을 놓으세요</p>
+            <p className="text-sm text-muted-foreground">.mid 또는 .midi 파일 자동 분석</p>
+          </div>
+        </div>
+      )}
+
       <header className="shrink-0 border-b border-border">
         <div className="flex items-center gap-4 px-5 py-2.5">
           <div className="min-w-0 shrink-0">
@@ -114,11 +165,20 @@ export function LessonApp() {
               type="file"
               accept=".mid,.midi,audio/midi"
               className="sr-only"
-              onChange={(e) => onFile(e.target.files?.[0])}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onFile(file);
+                e.target.value = "";
+              }}
             />
-            <Button variant="outline" className="min-h-10" onClick={() => fileRef.current?.click()}>
+            <Button
+              variant="outline"
+              className="min-h-10"
+              disabled={loading}
+              onClick={() => fileRef.current?.click()}
+            >
               <Upload />
-              MIDI 올리기
+              {loading ? "분석 중..." : "MIDI 올리기"}
             </Button>
           </div>
         </div>

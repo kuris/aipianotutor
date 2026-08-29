@@ -11,7 +11,28 @@ function spanComfort(fA: Finger, fB: Finger): number {
   return 8.5;
 }
 
+function fallbackFingers(count: number, hand: HandId): Finger[] {
+  if (count <= 0) return [];
+  if (count === 1) return [hand === "R" ? 2 : 2];
+  if (count === 2) return hand === "R" ? [1, 5] : [5, 1];
+  if (count === 3) return hand === "R" ? [1, 3, 5] : [5, 3, 1];
+  if (count === 4) return hand === "R" ? [1, 2, 3, 5] : [5, 3, 2, 1];
+  if (count === 5) return hand === "R" ? [1, 2, 3, 4, 5] : [5, 4, 3, 2, 1];
+  // count > 5: map pitches across 5 fingers proportionally
+  const res: Finger[] = [];
+  const base = hand === "R" ? [1, 2, 3, 4, 5] : [5, 4, 3, 2, 1];
+  for (let i = 0; i < count; i++) {
+    const fingerIdx = Math.min(4, Math.floor((i / count) * 5));
+    res.push(base[fingerIdx] as Finger);
+  }
+  return res;
+}
+
 function chordCombos(n: number): Finger[][] {
+  if (n <= 0) return [[]];
+  if (n > 5) {
+    return [fallbackFingers(n, "R")];
+  }
   const out: Finger[][] = [];
   const rec = (start: number, acc: Finger[]) => {
     if (acc.length === n) {
@@ -25,7 +46,7 @@ function chordCombos(n: number): Finger[][] {
     }
   };
   rec(0, []);
-  return out;
+  return out.length > 0 ? out : [fallbackFingers(n, "R")];
 }
 
 function groupOnsets(notes: ScoreNote[], grid = 0.12): ScoreNote[][] {
@@ -70,7 +91,7 @@ function transitionCost(
     if (df === 0) {
       cost += 3.2 + absP * 0.45;
     } else {
-      const stretch = absP / absF;
+      const stretch = absP / (absF || 1);
       cost += Math.abs(stretch - 2.2) * 0.9;
       if (Math.sign(dp) !== Math.sign(df) * dir) {
         const thumbUnder =
@@ -115,9 +136,12 @@ function avg(xs: number[]): number {
 }
 
 function assignmentsForGroup(notes: ScoreNote[], hand: HandId): Finger[][] {
-  const sorted = [...notes].sort((a, b) => a.pitch - b.pitch);
-  const n = sorted.length;
+  const n = notes.length;
+  if (n === 0) return [[]];
   if (n === 1) return FINGERS.map((f) => [f]);
+  if (n > 5) {
+    return [fallbackFingers(n, hand)];
+  }
   const combos = chordCombos(n);
   return combos.map((fingers) => (hand === "R" ? fingers : [...fingers].reverse()));
 }
@@ -179,26 +203,36 @@ export function fingerHand(notes: ScoreNote[], hand: HandId): FingeredNote[] {
   }
 
   const groups = groupOnsets(mine);
-  const states: PathNode[][] = groups.map((g) =>
-    assignmentsForGroup(g, hand).map((fingers) => ({
+  if (groups.length === 0) return [];
+
+  const states: PathNode[][] = groups.map((g) => {
+    const assigns = assignmentsForGroup(g, hand);
+    const list = assigns.length > 0 ? assigns : [fallbackFingers(g.length, hand)];
+    return list.map((fingers) => ({
       cost: Infinity,
       prev: -1,
       fingers,
-    })),
-  );
+    }));
+  });
 
-  if (!states[0]) return [];
-  for (const s of states[0]) s.cost = 0.4 * s.fingers.reduce((a, f) => a + Math.abs(f - 3), 0);
+  if (!states[0] || states[0].length === 0) return [];
+  for (const s of states[0]) {
+    s.cost = 0.4 * s.fingers.reduce((a, f) => a + Math.abs(f - 3), 0);
+  }
 
   for (let i = 1; i < groups.length; i++) {
     const prevG = groups[i - 1]!;
     const g = groups[i]!;
     const prevSorted = [...prevG].sort((a, b) => a.pitch - b.pitch);
     const sorted = [...g].sort((a, b) => a.pitch - b.pitch);
-    for (let j = 0; j < states[i]!.length; j++) {
-      const node = states[i]![j]!;
-      for (let k = 0; k < states[i - 1]!.length; k++) {
-        const prev = states[i - 1]![k]!;
+    const prevStates = states[i - 1]!;
+    const curStates = states[i]!;
+
+    for (let j = 0; j < curStates.length; j++) {
+      const node = curStates[j]!;
+      for (let k = 0; k < prevStates.length; k++) {
+        const prev = prevStates[k]!;
+        if (!isFinite(prev.cost)) continue;
         const c =
           prev.cost +
           transitionCost(
@@ -213,12 +247,17 @@ export function fingerHand(notes: ScoreNote[], hand: HandId): FingeredNote[] {
           node.prev = k;
         }
       }
+      // If no valid transition found, fallback to linking to first prev state
+      if (!isFinite(node.cost) && prevStates.length > 0) {
+        node.cost = (isFinite(prevStates[0]!.cost) ? prevStates[0]!.cost : 0) + 10;
+        node.prev = 0;
+      }
     }
   }
 
   let bi = 0;
   let best = Infinity;
-  const last = states[states.length - 1]!;
+  const last = states[states.length - 1] ?? [];
   last.forEach((s, i) => {
     if (s.cost < best) {
       best = s.cost;
@@ -228,13 +267,16 @@ export function fingerHand(notes: ScoreNote[], hand: HandId): FingeredNote[] {
 
   const chosen: Finger[][] = new Array(groups.length);
   for (let i = states.length - 1; i >= 0; i--) {
-    chosen[i] = states[i]![bi]!.fingers;
-    bi = states[i]![bi]!.prev === -1 ? 0 : states[i]![bi]!.prev;
+    const curStateList = states[i];
+    const node = curStateList && curStateList[bi] ? curStateList[bi] : curStateList?.[0];
+    chosen[i] = node ? node.fingers : fallbackFingers(groups[i]!.length, hand);
+    bi = node && node.prev !== -1 ? node.prev : 0;
   }
 
   const out: FingeredNote[] = [];
   groups.forEach((g, i) => {
     const sorted = [...g].sort((a, b) => a.pitch - b.pitch);
+    const fingers = chosen[i] ?? fallbackFingers(g.length, hand);
     sorted.forEach((n, k) => {
       out.push({
         id: n.id,
@@ -244,7 +286,7 @@ export function fingerHand(notes: ScoreNote[], hand: HandId): FingeredNote[] {
         velocity: n.velocity,
         track: n.track,
         hand,
-        finger: chosen[i]![k] ?? 3,
+        finger: fingers[k] ?? (hand === "R" ? 3 : 3),
         motion: "FINGER_MOVE",
       });
     });
