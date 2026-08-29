@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, UserCheck, UserX } from "lucide-react";
 import {
   BLACK_KEY_H,
   BLACK_KEY_W,
@@ -35,18 +36,19 @@ const KNUCKLE_Z: Record<Finger, number> = {
   5: 7,
 };
 
-const FINGER_LENGTHS: Record<Finger, number[]> = {
-  1: [9, 7],
-  2: [12, 10, 7],
-  3: [14, 11, 8],
-  4: [12, 10, 7],
-  5: [10, 7, 6],
+const FINGER_SPECS: Record<Finger, { radius: number; lengths: [number, number, number] }> = {
+  1: { radius: 2.6, lengths: [9, 8, 7] },
+  2: { radius: 2.3, lengths: [12, 10, 8] },
+  3: { radius: 2.4, lengths: [14, 11, 9] },
+  4: { radius: 2.2, lengths: [12, 10, 8] },
+  5: { radius: 1.9, lengths: [10, 8, 7] },
 };
 
 export function PianoStage3D({ frame, range }: PianoStage3DProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showAvatar, setShowAvatar] = useState(true);
 
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer;
@@ -58,13 +60,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     lhGroup: THREE.Group;
     rhFingers: Map<Finger, THREE.Group>;
     lhFingers: Map<Finger, THREE.Group>;
-    rhArm: THREE.Group;
-    lhArm: THREE.Group;
-    rhForearm: THREE.Mesh;
-    lhForearm: THREE.Mesh;
-    pianistBody: THREE.Group;
-    pianistTorso: THREE.Group;
-    pianistHead: THREE.Group;
+    pianistAvatarGroup: THREE.Group;
     cameraTargetPos?: THREE.Vector3;
     controlsTargetPos?: THREE.Vector3;
   } | null>(null);
@@ -113,13 +109,13 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
 
     // 1. Scene Setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1e28); // Soft cinematic anime blue-gray
-    scene.fog = new THREE.FogExp2(0x1a1e28, 0.0008);
+    scene.background = new THREE.Color(0x181b24); // Soft anime cinematic studio dark navy
+    scene.fog = new THREE.FogExp2(0x181b24, 0.0008);
 
-    // Exact reference camera angle: Left 3/4 Anime Side Profile View
+    // Camera: Left 3/4 Anime Profile Side Shot
     const camera = new THREE.PerspectiveCamera(34, width / height, 1, 3000);
-    camera.position.set(-165, 88, 145);
-    camera.lookAt(40, 18, -15);
+    camera.position.set(-160, 85, 140);
+    camera.lookAt(35, 18, -15);
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -128,37 +124,37 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 1.25;
     container.appendChild(renderer.domElement);
 
-    // 2. Soft Anime Cinematic Lighting
-    const ambientLight = new THREE.AmbientLight(0xf2e8e1, 1.6);
+    // 2. Concert Lighting
+    const ambientLight = new THREE.AmbientLight(0xffeedd, 1.6);
     scene.add(ambientLight);
 
-    const keySpot = new THREE.SpotLight(0xfff6ea, 3.2, 1600, Math.PI / 3.5, 0.5, 1.2);
-    keySpot.position.set(-120, 360, 240);
-    keySpot.target.position.set(0, 10, -20);
-    keySpot.castShadow = true;
-    keySpot.shadow.mapSize.width = 2048;
-    keySpot.shadow.mapSize.height = 2048;
-    keySpot.shadow.bias = -0.0002;
-    scene.add(keySpot);
-    scene.add(keySpot.target);
+    const mainSpot = new THREE.SpotLight(0xfffaee, 3.5, 1800, Math.PI / 3.5, 0.45, 1.2);
+    mainSpot.position.set(-120, 380, 240);
+    mainSpot.target.position.set(0, 0, -30);
+    mainSpot.castShadow = true;
+    mainSpot.shadow.mapSize.width = 2048;
+    mainSpot.shadow.mapSize.height = 2048;
+    mainSpot.shadow.bias = -0.0002;
+    scene.add(mainSpot);
+    scene.add(mainSpot.target);
 
-    const rimLight = new THREE.DirectionalLight(0xaac2eb, 1.4);
-    rimLight.position.set(240, 220, -180);
-    scene.add(rimLight);
+    const harpGoldLight = new THREE.PointLight(0xffc244, 2.2, 600);
+    harpGoldLight.position.set(-60, 110, -160);
+    scene.add(harpGoldLight);
 
-    const hairBackLight = new THREE.PointLight(0xffe8d6, 1.8, 500);
-    hairBackLight.position.set(-80, 120, 180);
-    scene.add(hairBackLight);
+    const rimCoolLight = new THREE.DirectionalLight(0xa5c0ed, 1.3);
+    rimCoolLight.position.set(240, 200, -180);
+    scene.add(rimCoolLight);
 
-    // 3. Studio Stage Floor
+    // 3. Stage Floor
     const floorGeo = new THREE.PlaneGeometry(3000, 3000);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x1f242e,
-      roughness: 0.4,
-      metalness: 0.1,
+      color: 0x1a1e27,
+      roughness: 0.38,
+      metalness: 0.12,
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
@@ -166,29 +162,35 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // 4. Grand Piano Group (Satin Matte/Gloss Black)
+    // 4. Concert Grand Piano
     const pianoGroup = new THREE.Group();
     scene.add(pianoGroup);
 
-    const blackPianoMat = new THREE.MeshStandardMaterial({
-      color: 0x111317,
-      roughness: 0.22,
-      metalness: 0.8,
+    const blackGlossMat = new THREE.MeshStandardMaterial({
+      color: 0x111318,
+      roughness: 0.18,
+      metalness: 0.85,
     });
 
-    const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xd69b2d,
-      roughness: 0.25,
+    const goldHarpMat = new THREE.MeshStandardMaterial({
+      color: 0xdea032,
+      roughness: 0.2,
       metalness: 0.9,
     });
 
-    const woodSoundboardMat = new THREE.MeshStandardMaterial({
+    const soundboardMat = new THREE.MeshStandardMaterial({
       color: 0xb57840,
-      roughness: 0.5,
+      roughness: 0.45,
       metalness: 0.05,
     });
 
-    // Grand Piano Rim & Body
+    const stringMat = new THREE.MeshStandardMaterial({
+      color: 0xd8d8e6,
+      roughness: 0.18,
+      metalness: 0.95,
+    });
+
+    // Grand Piano Rim Shape
     const rimShape = new THREE.Shape();
     rimShape.moveTo(-380, 0);
     rimShape.lineTo(380, 0);
@@ -204,7 +206,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       bevelThickness: 3,
     });
     rimExtrude.rotateX(Math.PI / 2);
-    const pianoRim = new THREE.Mesh(rimExtrude, blackPianoMat);
+    const pianoRim = new THREE.Mesh(rimExtrude, blackGlossMat);
     pianoRim.position.set(0, 6, -30);
     pianoRim.castShadow = true;
     pianoRim.receiveShadow = true;
@@ -213,30 +215,42 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     // Soundboard
     const soundboardGeo = new THREE.ShapeGeometry(rimShape);
     soundboardGeo.rotateX(Math.PI / 2);
-    const soundboard = new THREE.Mesh(soundboardGeo, woodSoundboardMat);
+    const soundboard = new THREE.Mesh(soundboardGeo, soundboardMat);
     soundboard.position.set(0, -12, -30);
     soundboard.receiveShadow = true;
     pianoGroup.add(soundboard);
 
-    // Golden Harp
+    // Gold Cast-Iron Plate
     const harpPlateGeo = new THREE.BoxGeometry(540, 6, 300);
-    const harpPlate = new THREE.Mesh(harpPlateGeo, goldMat);
+    const harpPlate = new THREE.Mesh(harpPlateGeo, goldHarpMat);
     harpPlate.position.set(-15, -8, -260);
     pianoGroup.add(harpPlate);
 
-    // Piano Music Desk (보면대)
-    const musicDeskGeo = new THREE.BoxGeometry(260, 38, 6);
-    const musicDesk = new THREE.Mesh(musicDeskGeo, blackPianoMat);
-    musicDesk.position.set(0, 32, -45);
-    musicDesk.rotation.x = -0.32;
-    musicDesk.castShadow = true;
-    pianoGroup.add(musicDesk);
+    for (let i = 0; i < 5; i++) {
+      const ribGeo = new THREE.CylinderGeometry(3.5, 4.5, 270 - i * 28, 12);
+      ribGeo.rotateZ(Math.PI / 2);
+      ribGeo.rotateY(0.25 + i * 0.08);
+      const rib = new THREE.Mesh(ribGeo, goldHarpMat);
+      rib.position.set(-110 + i * 48, -4, -160 - i * 36);
+      pianoGroup.add(rib);
+    }
+
+    // Strings
+    for (let s = 0; s < 36; s++) {
+      const sx = -280 + s * 16;
+      const sLen = 380 - Math.abs(s - 8) * 4;
+      const strGeo = new THREE.CylinderGeometry(0.5, 0.5, sLen, 4);
+      strGeo.rotateX(Math.PI / 2);
+      const strMesh = new THREE.Mesh(strGeo, stringMat);
+      strMesh.position.set(sx, -4, -25 - sLen / 2);
+      pianoGroup.add(strMesh);
+    }
 
     // Open Lid (45 degrees)
     const lidGroup = new THREE.Group();
     lidGroup.position.set(-380, 8, -30);
     const lidGeo = new THREE.ShapeGeometry(rimShape);
-    const lidMesh = new THREE.Mesh(lidGeo, blackPianoMat);
+    const lidMesh = new THREE.Mesh(lidGeo, blackGlossMat);
     lidMesh.castShadow = true;
     lidMesh.position.set(380, 0, 0);
     lidGroup.add(lidMesh);
@@ -245,10 +259,18 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     lidGroup.rotation.z = -Math.PI / 2;
     pianoGroup.add(lidGroup);
 
+    // Music Desk (보면대)
+    const musicDeskGeo = new THREE.BoxGeometry(260, 36, 6);
+    const musicDesk = new THREE.Mesh(musicDeskGeo, blackGlossMat);
+    musicDesk.position.set(0, 30, -42);
+    musicDesk.rotation.x = -0.32;
+    musicDesk.castShadow = true;
+    pianoGroup.add(musicDesk);
+
     // Piano Legs
     const legGeo = new THREE.CylinderGeometry(10, 7, 95, 16);
     [[-340, -48, -40], [340, -48, -40], [-110, -48, -540]].forEach(([lx, ly, lz]) => {
-      const leg = new THREE.Mesh(legGeo, blackPianoMat);
+      const leg = new THREE.Mesh(legGeo, blackGlossMat);
       leg.position.set(lx, ly, lz);
       leg.castShadow = true;
       pianoGroup.add(leg);
@@ -260,15 +282,15 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     const blackKeyGeo = new THREE.BoxGeometry(BLACK_KEY_W - 1.0, 16, BLACK_KEY_H);
 
     const whiteKeyMat = new THREE.MeshStandardMaterial({
-      color: 0xfbfbfa,
-      roughness: 0.18,
+      color: 0xfafaf8,
+      roughness: 0.16,
       metalness: 0.04,
     });
 
     const blackKeyMat = new THREE.MeshStandardMaterial({
       color: 0x14161a,
-      roughness: 0.25,
-      metalness: 0.1,
+      roughness: 0.22,
+      metalness: 0.12,
     });
 
     const centerOffset = keyCenterX(60, range.start);
@@ -287,222 +309,85 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       keysMap.set(p, { mesh, initialY: ky, isBlack: black });
     }
 
-    // 5. Anime School Girl Pianist (Silver Long Hair & Beige School Blazer)
-    const benchGeo = new THREE.BoxGeometry(240, 14, 85);
-    const benchTop = new THREE.Mesh(benchGeo, blackPianoMat);
+    // 5. Concert Bench Group
+    const benchGeo = new THREE.BoxGeometry(260, 14, 90);
+    const benchTop = new THREE.Mesh(benchGeo, blackGlossMat);
     benchTop.position.set(0, -32, 105);
     benchTop.castShadow = true;
     pianoGroup.add(benchTop);
 
     const benchLegGeo = new THREE.CylinderGeometry(4.5, 3.5, 65, 12);
-    [[-100, -64, 75], [100, -64, 75], [-100, -64, 135], [100, -64, 135]].forEach(([bx, by, bz]) => {
-      const bLeg = new THREE.Mesh(benchLegGeo, blackPianoMat);
+    [[-110, -64, 75], [110, -64, 75], [-110, -64, 135], [110, -64, 135]].forEach(([bx, by, bz]) => {
+      const bLeg = new THREE.Mesh(benchLegGeo, blackGlossMat);
       bLeg.position.set(bx, by, bz);
       bLeg.castShadow = true;
       pianoGroup.add(bLeg);
     });
 
-    // Pianist Character Group
-    const pianistBody = new THREE.Group();
-    pianistBody.position.set(0, -25, 105);
-    pianoGroup.add(pianistBody);
+    // 6. Real 3D Anime Girl Model (GLTF/GLB)
+    const pianistAvatarGroup = new THREE.Group();
+    pianistAvatarGroup.position.set(0, -30, 95);
+    pianoGroup.add(pianistAvatarGroup);
 
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load(
+      "/models/anime_girl.glb",
+      (gltf) => {
+        const model = gltf.scene;
+
+        // Compute Bounding Box to normalize scale perfectly
+        const bbox = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        bbox.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scaleFactor = 105 / (maxDim || 1);
+
+        model.scale.set(scaleFactor, scaleFactor, scaleFactor);
+        model.rotation.y = Math.PI; // Face the piano keys
+        model.position.set(0, 0, 0);
+
+        model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        pianistAvatarGroup.add(model);
+      },
+      undefined,
+      (err) => {
+        console.warn("Anime girl model load fallback:", err);
+      },
+    );
+
+    // 7. Natural Virtuoso 3D Hands on Keyboard
     const skinMat = new THREE.MeshStandardMaterial({
-      color: 0xffe6d8, // Fair anime skin
-      roughness: 0.55,
-      metalness: 0.02,
+      color: 0xffe2d2,
+      roughness: 0.48,
+      metalness: 0.04,
     });
 
-    const silverHairMat = new THREE.MeshStandardMaterial({
-      color: 0xe5eaf0, // Silver/Platinum hair
-      roughness: 0.38,
-      metalness: 0.12,
-    });
-
-    const blazerBeigeMat = new THREE.MeshStandardMaterial({
-      color: 0xdfcca6, // School uniform beige blazer
-      roughness: 0.7,
-      metalness: 0.05,
-    });
-
-    const skirtNavyMat = new THREE.MeshStandardMaterial({
-      color: 0x363842, // Charcoal pleated skirt
-      roughness: 0.75,
-      metalness: 0.05,
-    });
-
-    const socksMat = new THREE.MeshStandardMaterial({
-      color: 0xf5f5f5,
-      roughness: 0.6,
-    });
-
-    const shoesMat = new THREE.MeshStandardMaterial({
-      color: 0x1f1b18,
-      roughness: 0.3,
-      metalness: 0.4,
-    });
-
-    // Seated Legs & Skirt
-    const skirtGeo = new THREE.CylinderGeometry(14, 22, 24, 24);
-    const skirt = new THREE.Mesh(skirtGeo, skirtNavyMat);
-    skirt.position.set(0, 10, 0);
-    skirt.castShadow = true;
-    pianistBody.add(skirt);
-
-    // Legs sitting forward
-    const thighGeo = new THREE.CylinderGeometry(5.2, 4.6, 26, 14);
-    thighGeo.rotateX(Math.PI / 2);
-    const leftThigh = new THREE.Mesh(thighGeo, skinMat);
-    leftThigh.position.set(-6.5, 4, -12);
-    leftThigh.castShadow = true;
-    pianistBody.add(leftThigh);
-
-    const rightThigh = new THREE.Mesh(thighGeo, skinMat);
-    rightThigh.position.set(6.5, 4, -12);
-    rightThigh.castShadow = true;
-    pianistBody.add(rightThigh);
-
-    // Lower legs with white socks
-    const calfGeo = new THREE.CylinderGeometry(4.2, 3.6, 30, 14);
-    const leftCalf = new THREE.Mesh(calfGeo, socksMat);
-    leftCalf.position.set(-6.5, -15, -24);
-    leftCalf.castShadow = true;
-    pianistBody.add(leftCalf);
-
-    const rightCalf = new THREE.Mesh(calfGeo, socksMat);
-    rightCalf.position.set(6.5, -15, -24);
-    rightCalf.castShadow = true;
-    pianistBody.add(rightCalf);
-
-    // Shoes
-    const shoeGeo = new THREE.BoxGeometry(6.5, 6, 14);
-    const leftShoe = new THREE.Mesh(shoeGeo, shoesMat);
-    leftShoe.position.set(-6.5, -31, -22);
-    pianistBody.add(leftShoe);
-
-    const rightShoe = new THREE.Mesh(shoeGeo, shoesMat);
-    rightShoe.position.set(6.5, -31, -22);
-    pianistBody.add(rightShoe);
-
-    // Torso Group (Beige Blazer)
-    const pianistTorso = new THREE.Group();
-    pianistTorso.position.set(0, 22, 0);
-    pianistBody.add(pianistTorso);
-
-    const torsoGeo = new THREE.CylinderGeometry(11, 13.5, 36, 18);
-    const torsoMesh = new THREE.Mesh(torsoGeo, blazerBeigeMat);
-    torsoMesh.position.set(0, 18, 0);
-    torsoMesh.rotation.x = -0.06; // slight lean forward to piano
-    torsoMesh.castShadow = true;
-    pianistTorso.add(torsoMesh);
-
-    // Collar / Ribbon
-    const ribbonGeo = new THREE.ConeGeometry(3.5, 7, 4);
-    const ribbonMat = new THREE.MeshStandardMaterial({ color: 0x8a2c2c, roughness: 0.6 });
-    const ribbon = new THREE.Mesh(ribbonGeo, ribbonMat);
-    ribbon.position.set(0, 31, -11.5);
-    ribbon.rotation.x = Math.PI;
-    pianistTorso.add(ribbon);
-
-    // Head Group (Silver Anime Hair)
-    const pianistHead = new THREE.Group();
-    pianistHead.position.set(0, 42, -2);
-    pianistTorso.add(pianistHead);
-
-    const headGeo = new THREE.SphereGeometry(9.0, 18, 16);
-    headGeo.scale(1, 1.15, 1.05);
-    const head = new THREE.Mesh(headGeo, skinMat);
-    head.castShadow = true;
-    pianistHead.add(head);
-
-    // Silver Anime Hair Elements
-    // Top Dome Hair
-    const hairTopGeo = new THREE.SphereGeometry(10.2, 18, 16);
-    hairTopGeo.scale(1.05, 1.12, 1.15);
-    const hairTop = new THREE.Mesh(hairTopGeo, silverHairMat);
-    hairTop.position.set(0, 3, -1);
-    hairTop.castShadow = true;
-    pianistHead.add(hairTop);
-
-    // Front Bangs (Anime Fringe)
-    const bangsGeo = new THREE.ConeGeometry(5, 12, 8);
-    bangsGeo.rotateZ(0.1);
-    const bangs = new THREE.Mesh(bangsGeo, silverHairMat);
-    bangs.position.set(-2.5, 2, -9.5);
-    bangs.rotation.x = 0.3;
-    pianistHead.add(bangs);
-
-    const bangs2 = new THREE.Mesh(bangsGeo, silverHairMat);
-    bangs2.position.set(2.5, 2, -9.5);
-    bangs2.rotation.x = 0.3;
-    pianistHead.add(bangs2);
-
-    // Long Flowing Side Locks (Left & Right)
-    const sideLockGeo = new THREE.CylinderGeometry(2.0, 0.6, 38, 12);
-    const leftSideLock = new THREE.Mesh(sideLockGeo, silverHairMat);
-    leftSideLock.position.set(-8.5, -10, -5);
-    leftSideLock.rotation.z = -0.12;
-    leftSideLock.rotation.x = 0.15;
-    leftSideLock.castShadow = true;
-    pianistHead.add(leftSideLock);
-
-    const rightSideLock = new THREE.Mesh(sideLockGeo, silverHairMat);
-    rightSideLock.position.set(8.5, -10, -5);
-    rightSideLock.rotation.z = 0.12;
-    rightSideLock.rotation.x = 0.15;
-    rightSideLock.castShadow = true;
-    pianistHead.add(rightSideLock);
-
-    // Long Flowing Back Hair (Down to waist)
-    const backHairGeo = new THREE.CylinderGeometry(8.5, 12.0, 48, 16);
-    const backHair = new THREE.Mesh(backHairGeo, silverHairMat);
-    backHair.position.set(0, -14, 5.5);
-    backHair.rotation.x = -0.15;
-    backHair.castShadow = true;
-    pianistHead.add(backHair);
-
-    // 6. Arms with Beige Blazer Sleeves & Natural Pianist Hands
-    function createAnimePianistArm(hand: "R" | "L") {
+    function createVirtuosoPianoHand(hand: "R" | "L") {
       const isRh = hand === "R";
-      const armGroup = new THREE.Group();
-      scene.add(armGroup);
-
-      // Upper arm sleeve from shoulder
-      const shoulderX = isRh ? 15 : -15;
-      const upperArmGeo = new THREE.CylinderGeometry(4.2, 3.8, 30, 12);
-      upperArmGeo.rotateX(Math.PI / 3.2);
-      const upperArm = new THREE.Mesh(upperArmGeo, blazerBeigeMat);
-      upperArm.position.set(shoulderX, 30, 90);
-      upperArm.castShadow = true;
-      armGroup.add(upperArm);
-
-      // Forearm sleeve reaching to keys
-      const forearmGeo = new THREE.CylinderGeometry(3.6, 3.2, 36, 12);
-      forearmGeo.rotateX(Math.PI / 2.2);
-      const forearm = new THREE.Mesh(forearmGeo, blazerBeigeMat);
-      forearm.position.set(shoulderX * 0.7, 16, 50);
-      forearm.castShadow = true;
-      armGroup.add(forearm);
-
-      // Hand Group (Palm & Fingers)
       const handGroup = new THREE.Group();
       scene.add(handGroup);
 
       // Curved Palm
-      const palmGeo = new THREE.SphereGeometry(1, 14, 12);
-      palmGeo.scale(13, 4.8, 12);
+      const palmGeo = new THREE.SphereGeometry(1, 16, 14);
+      palmGeo.scale(14, 5.0, 12);
       const palm = new THREE.Mesh(palmGeo, skinMat);
       palm.castShadow = true;
       palm.rotation.x = -0.16;
       handGroup.add(palm);
 
-      // 5 Curved Fingers
+      // 5 Arched Fingers
       const fingers = new Map<Finger, THREE.Group>();
       const fNums: Finger[] = [1, 2, 3, 4, 5];
 
       for (const f of fNums) {
         const fGroup = new THREE.Group();
-        const lens = FINGER_LENGTHS[f];
+        const spec = FINGER_SPECS[f];
         const kx = (isRh ? 1 : -1) * KNUCKLE_DX[f];
         const kz = KNUCKLE_Z[f];
 
@@ -510,10 +395,10 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
 
         let curZ = 0;
         let curY = 0;
-        lens.forEach((len, segIdx) => {
-          const r = (2.4 - segIdx * 0.3) * (f === 1 ? 1.1 : f === 5 ? 0.85 : 1.0);
+        spec.lengths.forEach((len, segIdx) => {
+          const r = (spec.radius - segIdx * 0.35);
           const segGeo = new THREE.CylinderGeometry(r * 0.85, r, len, 10);
-          segGeo.rotateX(Math.PI / 2 + 0.26 * segIdx);
+          segGeo.rotateX(Math.PI / 2 + 0.25 * segIdx);
           const seg = new THREE.Mesh(segGeo, skinMat);
           seg.position.set(0, curY - len * 0.15, curZ - len * 0.45);
           seg.castShadow = true;
@@ -523,8 +408,8 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
           curY -= len * 0.35;
         });
 
-        // Touch Ring Accent
-        const ringGeo = new THREE.TorusGeometry(2.6, 0.6, 8, 14);
+        // Touch Ring Glow Accent
+        const ringGeo = new THREE.TorusGeometry(2.6, 0.65, 8, 14);
         ringGeo.rotateX(Math.PI / 2);
         const ringMat = new THREE.MeshBasicMaterial({
           color: isRh ? 0xff4d79 : 0x00c4e6,
@@ -539,20 +424,20 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
         fingers.set(f, fGroup);
       }
 
-      return { armGroup, forearm, handGroup, fingers };
+      return { handGroup, fingers };
     }
 
-    const rh = createAnimePianistArm("R");
-    const lh = createAnimePianistArm("L");
+    const rh = createVirtuosoPianoHand("R");
+    const lh = createVirtuosoPianoHand("L");
 
-    // 7. OrbitControls
+    // 8. OrbitControls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
     controls.minDistance = 40;
     controls.maxDistance = 1200;
     controls.maxPolarAngle = Math.PI / 2 + 0.04;
-    controls.target.set(40, 18, -15);
+    controls.target.set(35, 18, -15);
 
     controls.addEventListener("start", () => {
       setViewAngle("custom");
@@ -568,13 +453,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       lhGroup: lh.handGroup,
       rhFingers: rh.fingers,
       lhFingers: lh.fingers,
-      rhArm: rh.armGroup,
-      lhArm: lh.armGroup,
-      rhForearm: rh.forearm,
-      lhForearm: lh.forearm,
-      pianistBody,
-      pianistTorso,
-      pianistHead,
+      pianistAvatarGroup,
     };
 
     // Resize Handler
@@ -625,28 +504,34 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     };
   }, []);
 
+  // Update Avatar Visibility
+  useEffect(() => {
+    if (stateRef.current?.pianistAvatarGroup) {
+      stateRef.current.pianistAvatarGroup.visible = showAvatar;
+    }
+  }, [showAvatar]);
+
   // Update Camera Angle Presets
   useEffect(() => {
     const s = stateRef.current;
     if (!s || viewAngle === "custom") return;
 
     if (viewAngle === "anime_side") {
-      // Exact reference shot: Left side profile anime girl
-      s.cameraTargetPos = new THREE.Vector3(-165, 88, 145);
-      s.controlsTargetPos = new THREE.Vector3(40, 18, -15);
+      s.cameraTargetPos = new THREE.Vector3(-160, 85, 140);
+      s.controlsTargetPos = new THREE.Vector3(35, 18, -15);
     } else if (viewAngle === "cinematic") {
-      s.cameraTargetPos = new THREE.Vector3(260, 150, 240);
-      s.controlsTargetPos = new THREE.Vector3(-20, 20, -10);
+      s.cameraTargetPos = new THREE.Vector3(240, 140, 220);
+      s.controlsTargetPos = new THREE.Vector3(-10, 15, -10);
     } else if (viewAngle === "player") {
-      s.cameraTargetPos = new THREE.Vector3(0, 95, 160);
+      s.cameraTargetPos = new THREE.Vector3(0, 90, 145);
       s.controlsTargetPos = new THREE.Vector3(0, 0, -15);
     } else if (viewAngle === "top") {
-      s.cameraTargetPos = new THREE.Vector3(0, 260, 30);
+      s.cameraTargetPos = new THREE.Vector3(0, 250, 30);
       s.controlsTargetPos = new THREE.Vector3(0, 0, -15);
     }
   }, [viewAngle]);
 
-  // Frame Update: Kinematics of Pianist, Arms, Hands and Keys
+  // Frame Update: Keys Animation & Hands Kinematics
   useEffect(() => {
     const s = stateRef.current;
     if (!s) return;
@@ -669,28 +554,26 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
         mat.emissive.setHex(activeHand === "R" ? 0x991133 : 0x005577);
         mat.emissiveIntensity = 0.55;
       } else {
-        mat.color.setHex(kInfo.isBlack ? 0x14161a : 0xfbfbfa);
+        mat.color.setHex(kInfo.isBlack ? 0x14161a : 0xfafaf8);
         mat.emissive.setHex(0x000000);
         mat.emissiveIntensity = 0;
       }
     });
 
-    // 2. Anime Pianist Natural Sway
+    // 2. Avatar Gentle Sway
     const activeCenterX = (frame.right.palmX + frame.left.palmX) / 2 - centerOffset;
     const strikeMax = Math.max(frame.right.strikeImpact ?? 0, frame.left.strikeImpact ?? 0);
 
-    s.pianistTorso.rotation.z = -activeCenterX * 0.0006;
-    s.pianistTorso.rotation.x = -0.06 - strikeMax * 0.03;
-    s.pianistHead.rotation.x = 0.06 + strikeMax * 0.06;
-    s.pianistHead.rotation.y = activeCenterX * 0.0005;
+    if (s.pianistAvatarGroup) {
+      s.pianistAvatarGroup.rotation.z = -activeCenterX * 0.0004;
+      s.pianistAvatarGroup.rotation.x = -strikeMax * 0.02;
+    }
 
-    // 3. Hand & Arm Kinematics
+    // 3. Hand Kinematics
     function updateHandPose(
       pose: HandFrame,
       handGroup: THREE.Group,
       fingerMap: Map<Finger, THREE.Group>,
-      armGroup: THREE.Group,
-      forearm: THREE.Mesh,
     ) {
       const hand = pose.hand;
       const isRh = hand === "R";
@@ -701,12 +584,6 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
 
       handGroup.position.set(targetPalmX, palmY, palmZ);
       handGroup.visible = pose.opacity > 0.05;
-      armGroup.visible = pose.opacity > 0.05;
-
-      // Forearm sleeve tracks to hand palm position
-      const shoulderX = isRh ? 15 : -15;
-      forearm.position.x = (shoulderX + targetPalmX) / 2;
-      forearm.position.y = 12 - wristBounce * 0.5;
 
       const anchors = pose.fingers.length
         ? pose.fingers
@@ -730,12 +607,12 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       });
     }
 
-    updateHandPose(frame.right, s.rhGroup, s.rhFingers, s.rhArm, s.rhForearm);
-    updateHandPose(frame.left, s.lhGroup, s.lhFingers, s.lhArm, s.lhForearm);
+    updateHandPose(frame.right, s.rhGroup, s.rhFingers);
+    updateHandPose(frame.left, s.lhGroup, s.lhFingers);
 
-    // Subtle gentle camera focus
+    // Gentle camera tracking
     if (viewAngle === "anime_side" && !s.cameraTargetPos) {
-      s.controls.target.x += (40 + activeCenterX * 0.15 - s.controls.target.x) * 0.04;
+      s.controls.target.x += (35 + activeCenterX * 0.12 - s.controls.target.x) * 0.04;
     }
   }, [frame, range, viewAngle]);
 
@@ -746,7 +623,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
         isFullscreen ? "fixed inset-0 z-50 rounded-none border-none" : "rounded-xl border border-border"
       }`}
     >
-      {/* 3D Camera Angles Bar */}
+      {/* 3D Camera Angles & Controls Bar */}
       <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/85 px-2.5 py-1.5 shadow-md backdrop-blur-md">
         <span className="text-[11px] font-semibold text-muted-foreground mr-1">🎥 시점:</span>
         <button
@@ -801,6 +678,30 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
 
         <div className="mx-1 h-3.5 w-px bg-border" />
 
+        {/* Toggle Avatar Visibility Button */}
+        <button
+          type="button"
+          onClick={() => setShowAvatar(!showAvatar)}
+          title={showAvatar ? "캐릭터 아바타 숨기기 (피아노 전용 뷰)" : "캐릭터 아바타 표시"}
+          className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold transition-all ${
+            showAvatar ? "bg-primary/20 text-primary border border-primary/30" : "bg-muted/60 text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {showAvatar ? (
+            <>
+              <UserCheck className="size-3.5" />
+              <span>캐릭터 ON</span>
+            </>
+          ) : (
+            <>
+              <UserX className="size-3.5" />
+              <span>캐릭터 OFF</span>
+            </>
+          )}
+        </button>
+
+        <div className="mx-1 h-3.5 w-px bg-border" />
+
         {/* Fullscreen Toggle Button */}
         <button
           type="button"
@@ -823,7 +724,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       </div>
 
       <div className="pointer-events-none absolute top-3 left-4 z-10 flex flex-col gap-0.5 text-[11px] font-medium tracking-wide text-muted-foreground">
-        <span className="text-white/90 font-semibold">✨ 피아니스트 연주 & 그랜드 피아노</span>
+        <span className="text-white/90 font-semibold">✨ 3D 피아니스트 연주 & 그랜드 피아노</span>
         <span className="text-[10px] text-neutral-400">
           🖱️ 마우스 드래그: 360° 회전 · 휠: 확대/축소 · 우클릭: 이동
         </span>
