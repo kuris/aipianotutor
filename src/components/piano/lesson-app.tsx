@@ -23,12 +23,12 @@ import { StaffView } from "@/components/piano/staff-view";
 import { useLessonPlayer, SPEEDS } from "@/hooks/use-lesson-player";
 import { buildDemoLesson, buildLessonFromNotes } from "@/lib/piano/lesson";
 import { parseMidiFile } from "@/lib/piano/midi";
-import { DEMO_SONGS, getDemo } from "@/lib/piano/songs";
+import { DEMO_SONGS, getDemo, SONG_CATALOG } from "@/lib/piano/songs";
 import { MOTION_LABEL, type Lesson } from "@/lib/piano/types";
 import { cn } from "@/lib/utils";
 
 function loadInitial(): Lesson {
-  return buildDemoLesson(getDemo("twinkle"));
+  return SONG_CATALOG[0]!;
 }
 
 export function LessonApp() {
@@ -51,11 +51,11 @@ export function LessonApp() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [cinemaMode]);
 
-  const [selectedCategory, setSelectedCategory] = useState<"all" | "pop_ost" | "classic" | "practice">("all");
-  const [selectedLevel, setSelectedLevel] = useState<"all" | "beginner" | "intermediate" | "advanced">("all");
+  const [selectedCategory, setSelectedCategory] = useState<"all" | "클래식" | "기초연습">("all");
+  const [selectedLevel, setSelectedLevel] = useState<"all" | "입문" | "초급" | "중급" | "고급">("all");
 
   const filteredSongs = useMemo(() => {
-    return DEMO_SONGS.filter((s) => {
+    return SONG_CATALOG.filter((s) => {
       const matchCat = selectedCategory === "all" || s.category === selectedCategory;
       const matchLvl = selectedLevel === "all" || s.level === selectedLevel;
       return matchCat && matchLvl;
@@ -63,9 +63,10 @@ export function LessonApp() {
   }, [selectedCategory, selectedLevel]);
 
   const levelLabels: Record<string, { label: string; color: string }> = {
-    beginner: { label: "입문", color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" },
-    intermediate: { label: "중급", color: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30" },
-    advanced: { label: "고급", color: "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30" },
+    입문: { label: "입문", color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" },
+    초급: { label: "초급", color: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30" },
+    중급: { label: "중급", color: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30" },
+    고급: { label: "고급", color: "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30" },
   };
 
   const measureCount = lesson.measures.length;
@@ -336,25 +337,24 @@ export function LessonApp() {
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1700px] flex-1 flex-col lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="flex shrink-0 flex-col gap-3 border-border p-3 lg:min-h-0 lg:overflow-y-auto lg:border-r">
-          {/* Category Filter Tabs */}
+          {/* Category Filter Pills */}
           <section className="rounded-lg border border-border bg-card p-2.5">
-            <p className="px-1 pb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">장르 카테고리</p>
-            <div className="grid grid-cols-2 gap-1">
+            <p className="px-1 pb-1.5 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">장르 카테고리</p>
+            <div className="grid grid-cols-3 gap-1">
               {[
                 { id: "all", label: "전체" },
-                { id: "pop_ost", label: "🍿 팝 & OST" },
-                { id: "classic", label: "🎻 클래식" },
-                { id: "practice", label: "🎹 기초연습" },
+                { id: "클래식", label: "🎼 클래식" },
+                { id: "기초연습", label: "🎹 기초연습" },
               ].map((c) => (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => setSelectedCategory(c.id as any)}
                   className={cn(
-                    "rounded-md px-2 py-1.5 text-xs font-medium transition-all text-center",
+                    "rounded-md px-2 py-1 text-xs font-medium transition-all text-center",
                     selectedCategory === c.id
-                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                      : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
+                      ? "bg-primary text-primary-foreground font-bold shadow-xs"
+                      : "bg-muted/40 text-muted-foreground hover:bg-muted",
                   )}
                 >
                   {c.label}
@@ -367,9 +367,10 @@ export function LessonApp() {
             <div className="flex gap-1">
               {[
                 { id: "all", label: "전체" },
-                { id: "beginner", label: "입문" },
-                { id: "intermediate", label: "중급" },
-                { id: "advanced", label: "고급" },
+                { id: "입문", label: "입문" },
+                { id: "초급", label: "초급" },
+                { id: "중급", label: "중급" },
+                { id: "고급", label: "고급" },
               ].map((lvl) => (
                 <button
                   key={lvl.id}
@@ -397,12 +398,12 @@ export function LessonApp() {
             <div className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
               {filteredSongs.map((s) => {
                 const active = lesson.id === s.id;
-                const lvlInfo = levelLabels[s.level] || levelLabels.beginner;
+                const lvlInfo = levelLabels[s.level] || levelLabels["입문"];
                 return (
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => setLesson(buildDemoLesson(s))}
+                    onClick={() => setLesson(s)}
                     className={cn(
                       "min-w-[180px] rounded-lg border p-2.5 text-left transition-all duration-150 lg:min-w-0",
                       active
