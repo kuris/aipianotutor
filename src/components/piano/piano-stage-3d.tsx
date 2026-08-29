@@ -4,13 +4,9 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Maximize2, Minimize2, UserCheck, UserX } from "lucide-react";
 import {
-  BLACK_KEY_H,
-  BLACK_KEY_W,
   fingerHomePitches,
   isBlackKey,
-  keyCenterX,
-  WHITE_KEY_H,
-  WHITE_KEY_W,
+  isWhiteKey,
   type KeyRange,
 } from "@/lib/piano/geometry";
 import type { Finger, HandFrame, LessonFrame } from "@/lib/piano/types";
@@ -20,12 +16,36 @@ interface PianoStage3DProps {
   range: KeyRange;
 }
 
+// Full 88-Key Grand Piano Range (A0 = 21 to C8 = 108)
+const PIANO_START_KEY = 21;
+const PIANO_END_KEY = 108;
+
+// 3D Specific Geometry
+const KEY_3D_WHITE_W = 16.5;
+const KEY_3D_BLACK_W = 9.8;
+const KEY_3D_WHITE_H = 105;
+const KEY_3D_BLACK_H = 66;
+
+function get3DKeyCenterX(pitch: number): number {
+  let whiteCount = 0;
+  for (let p = PIANO_START_KEY; p < pitch; p++) {
+    if (isWhiteKey(p)) whiteCount++;
+  }
+  if (isWhiteKey(pitch)) {
+    return (whiteCount + 0.5) * KEY_3D_WHITE_W;
+  }
+  return whiteCount * KEY_3D_WHITE_W;
+}
+
+const TOTAL_88_WIDTH = 52 * KEY_3D_WHITE_W; // ~858
+const CENTER_88_OFFSET = get3DKeyCenterX(60); // Center around Middle C (C4)
+
 const KNUCKLE_DX: Record<Finger, number> = {
-  1: -14,
-  2: -7,
+  1: -13,
+  2: -6,
   3: 1,
-  4: 8,
-  5: 14,
+  4: 7,
+  5: 13,
 };
 
 const KNUCKLE_Z: Record<Finger, number> = {
@@ -37,11 +57,11 @@ const KNUCKLE_Z: Record<Finger, number> = {
 };
 
 const FINGER_SPECS: Record<Finger, { radius: number; lengths: [number, number, number] }> = {
-  1: { radius: 2.6, lengths: [9, 8, 7] },
-  2: { radius: 2.3, lengths: [12, 10, 8] },
-  3: { radius: 2.4, lengths: [14, 11, 9] },
-  4: { radius: 2.2, lengths: [12, 10, 8] },
-  5: { radius: 1.9, lengths: [10, 8, 7] },
+  1: { radius: 2.5, lengths: [8, 7, 6] },
+  2: { radius: 2.2, lengths: [11, 9, 7] },
+  3: { radius: 2.3, lengths: [13, 10, 8] },
+  4: { radius: 2.1, lengths: [11, 9, 7] },
+  5: { radius: 1.8, lengths: [9, 7, 6] },
 };
 
 export function PianoStage3D({ frame, range }: PianoStage3DProps) {
@@ -109,13 +129,13 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
 
     // 1. Scene Setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x181b24); // Soft anime cinematic studio dark navy
-    scene.fog = new THREE.FogExp2(0x181b24, 0.0008);
+    scene.background = new THREE.Color(0x151821);
+    scene.fog = new THREE.FogExp2(0x151821, 0.0007);
 
-    // Camera: Left 3/4 Anime Profile Side Shot
-    const camera = new THREE.PerspectiveCamera(34, width / height, 1, 3000);
-    camera.position.set(-160, 85, 140);
-    camera.lookAt(35, 18, -15);
+    // Camera: Framed for full 88-key grand piano visibility
+    const camera = new THREE.PerspectiveCamera(36, width / height, 1, 3500);
+    camera.position.set(-220, 110, 210);
+    camera.lookAt(20, 15, -20);
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -127,13 +147,13 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     renderer.toneMappingExposure = 1.25;
     container.appendChild(renderer.domElement);
 
-    // 2. Concert Lighting
+    // 2. Lighting
     const ambientLight = new THREE.AmbientLight(0xffeedd, 1.6);
     scene.add(ambientLight);
 
-    const mainSpot = new THREE.SpotLight(0xfffaee, 3.5, 1800, Math.PI / 3.5, 0.45, 1.2);
-    mainSpot.position.set(-120, 380, 240);
-    mainSpot.target.position.set(0, 0, -30);
+    const mainSpot = new THREE.SpotLight(0xfffaee, 3.6, 2200, Math.PI / 3.2, 0.45, 1.2);
+    mainSpot.position.set(-150, 480, 320);
+    mainSpot.target.position.set(0, 0, -40);
     mainSpot.castShadow = true;
     mainSpot.shadow.mapSize.width = 2048;
     mainSpot.shadow.mapSize.height = 2048;
@@ -141,18 +161,18 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     scene.add(mainSpot);
     scene.add(mainSpot.target);
 
-    const harpGoldLight = new THREE.PointLight(0xffc244, 2.2, 600);
-    harpGoldLight.position.set(-60, 110, -160);
+    const harpGoldLight = new THREE.PointLight(0xffc244, 2.2, 800);
+    harpGoldLight.position.set(-80, 120, -200);
     scene.add(harpGoldLight);
 
-    const rimCoolLight = new THREE.DirectionalLight(0xa5c0ed, 1.3);
-    rimCoolLight.position.set(240, 200, -180);
+    const rimCoolLight = new THREE.DirectionalLight(0xa5c0ed, 1.4);
+    rimCoolLight.position.set(340, 240, -220);
     scene.add(rimCoolLight);
 
     // 3. Stage Floor
-    const floorGeo = new THREE.PlaneGeometry(3000, 3000);
+    const floorGeo = new THREE.PlaneGeometry(3500, 3500);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1e27,
+      color: 0x181c24,
       roughness: 0.38,
       metalness: 0.12,
     });
@@ -162,12 +182,12 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // 4. Concert Grand Piano
+    // 4. Concert Grand Piano (Full 88-Key Scale)
     const pianoGroup = new THREE.Group();
     scene.add(pianoGroup);
 
     const blackGlossMat = new THREE.MeshStandardMaterial({
-      color: 0x111318,
+      color: 0x101216,
       roughness: 0.18,
       metalness: 0.85,
     });
@@ -190,16 +210,17 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       metalness: 0.95,
     });
 
-    // Grand Piano Rim Shape
+    // Grand Piano Rim Shape for 88 Keys
+    const halfW = TOTAL_88_WIDTH / 2 + 35; // ~464
     const rimShape = new THREE.Shape();
-    rimShape.moveTo(-380, 0);
-    rimShape.lineTo(380, 0);
-    rimShape.lineTo(380, -80);
-    rimShape.bezierCurveTo(380, -320, 140, -560, -140, -600);
-    rimShape.bezierCurveTo(-340, -580, -380, -420, -380, 0);
+    rimShape.moveTo(-halfW, 0);
+    rimShape.lineTo(halfW, 0);
+    rimShape.lineTo(halfW, -110);
+    rimShape.bezierCurveTo(halfW, -380, halfW * 0.35, -680, -halfW * 0.35, -740);
+    rimShape.bezierCurveTo(-halfW * 0.85, -710, -halfW, -520, -halfW, 0);
 
     const rimExtrude = new THREE.ExtrudeGeometry(rimShape, {
-      depth: 85,
+      depth: 90,
       bevelEnabled: true,
       bevelSegments: 3,
       bevelSize: 3,
@@ -221,24 +242,24 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     pianoGroup.add(soundboard);
 
     // Gold Cast-Iron Plate
-    const harpPlateGeo = new THREE.BoxGeometry(540, 6, 300);
+    const harpPlateGeo = new THREE.BoxGeometry(halfW * 1.6, 6, 420);
     const harpPlate = new THREE.Mesh(harpPlateGeo, goldHarpMat);
-    harpPlate.position.set(-15, -8, -260);
+    harpPlate.position.set(-15, -8, -320);
     pianoGroup.add(harpPlate);
 
-    for (let i = 0; i < 5; i++) {
-      const ribGeo = new THREE.CylinderGeometry(3.5, 4.5, 270 - i * 28, 12);
+    for (let i = 0; i < 6; i++) {
+      const ribGeo = new THREE.CylinderGeometry(4.0, 5.0, 360 - i * 36, 12);
       ribGeo.rotateZ(Math.PI / 2);
-      ribGeo.rotateY(0.25 + i * 0.08);
+      ribGeo.rotateY(0.24 + i * 0.08);
       const rib = new THREE.Mesh(ribGeo, goldHarpMat);
-      rib.position.set(-110 + i * 48, -4, -160 - i * 36);
+      rib.position.set(-halfW * 0.6 + i * 68, -4, -200 - i * 48);
       pianoGroup.add(rib);
     }
 
     // Strings
-    for (let s = 0; s < 36; s++) {
-      const sx = -280 + s * 16;
-      const sLen = 380 - Math.abs(s - 8) * 4;
+    for (let s = 0; s < 48; s++) {
+      const sx = -halfW * 0.8 + s * 16;
+      const sLen = 480 - Math.abs(s - 10) * 5;
       const strGeo = new THREE.CylinderGeometry(0.5, 0.5, sLen, 4);
       strGeo.rotateX(Math.PI / 2);
       const strMesh = new THREE.Mesh(strGeo, stringMat);
@@ -248,11 +269,11 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
 
     // Open Lid (45 degrees)
     const lidGroup = new THREE.Group();
-    lidGroup.position.set(-380, 8, -30);
+    lidGroup.position.set(-halfW, 8, -30);
     const lidGeo = new THREE.ShapeGeometry(rimShape);
     const lidMesh = new THREE.Mesh(lidGeo, blackGlossMat);
     lidMesh.castShadow = true;
-    lidMesh.position.set(380, 0, 0);
+    lidMesh.position.set(halfW, 0, 0);
     lidGroup.add(lidMesh);
     lidGroup.rotation.y = -Math.PI / 2;
     lidGroup.rotation.x = -0.52;
@@ -260,26 +281,26 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     pianoGroup.add(lidGroup);
 
     // Music Desk (보면대)
-    const musicDeskGeo = new THREE.BoxGeometry(260, 36, 6);
+    const musicDeskGeo = new THREE.BoxGeometry(340, 42, 6);
     const musicDesk = new THREE.Mesh(musicDeskGeo, blackGlossMat);
-    musicDesk.position.set(0, 30, -42);
+    musicDesk.position.set(0, 32, -45);
     musicDesk.rotation.x = -0.32;
     musicDesk.castShadow = true;
     pianoGroup.add(musicDesk);
 
     // Piano Legs
-    const legGeo = new THREE.CylinderGeometry(10, 7, 95, 16);
-    [[-340, -48, -40], [340, -48, -40], [-110, -48, -540]].forEach(([lx, ly, lz]) => {
+    const legGeo = new THREE.CylinderGeometry(11, 8, 95, 16);
+    [[-halfW * 0.9, -48, -40], [halfW * 0.9, -48, -40], [-halfW * 0.3, -48, -660]].forEach(([lx, ly, lz]) => {
       const leg = new THREE.Mesh(legGeo, blackGlossMat);
       leg.position.set(lx, ly, lz);
       leg.castShadow = true;
       pianoGroup.add(leg);
     });
 
-    // 88 Piano Keys
+    // 88 Piano Keys (Complete A0 to C8)
     const keysMap = new Map<number, { mesh: THREE.Mesh; initialY: number; isBlack: boolean }>();
-    const whiteKeyGeo = new THREE.BoxGeometry(WHITE_KEY_W - 1.2, 14, WHITE_KEY_H);
-    const blackKeyGeo = new THREE.BoxGeometry(BLACK_KEY_W - 1.0, 16, BLACK_KEY_H);
+    const whiteKeyGeo = new THREE.BoxGeometry(KEY_3D_WHITE_W - 1.2, 14, KEY_3D_WHITE_H);
+    const blackKeyGeo = new THREE.BoxGeometry(KEY_3D_BLACK_W - 1.0, 16, KEY_3D_BLACK_H);
 
     const whiteKeyMat = new THREE.MeshStandardMaterial({
       color: 0xfafaf8,
@@ -293,13 +314,11 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       metalness: 0.12,
     });
 
-    const centerOffset = keyCenterX(60, range.start);
-
-    for (let p = range.start; p <= range.end; p++) {
+    for (let p = PIANO_START_KEY; p <= PIANO_END_KEY; p++) {
       const black = isBlackKey(p);
-      const kx = keyCenterX(p, range.start) - centerOffset;
+      const kx = get3DKeyCenterX(p) - CENTER_88_OFFSET;
       const ky = black ? 6.5 : 0;
-      const kz = black ? -BLACK_KEY_H / 2 + 10 : 0;
+      const kz = black ? -KEY_3D_BLACK_H / 2 + 10 : 0;
 
       const mesh = new THREE.Mesh(black ? blackKeyGeo : whiteKeyGeo, black ? blackKeyMat.clone() : whiteKeyMat.clone());
       mesh.position.set(kx, ky, kz);
@@ -310,14 +329,14 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     }
 
     // 5. Concert Bench Group
-    const benchGeo = new THREE.BoxGeometry(260, 14, 90);
+    const benchGeo = new THREE.BoxGeometry(320, 14, 90);
     const benchTop = new THREE.Mesh(benchGeo, blackGlossMat);
     benchTop.position.set(0, -32, 105);
     benchTop.castShadow = true;
     pianoGroup.add(benchTop);
 
     const benchLegGeo = new THREE.CylinderGeometry(4.5, 3.5, 65, 12);
-    [[-110, -64, 75], [110, -64, 75], [-110, -64, 135], [110, -64, 135]].forEach(([bx, by, bz]) => {
+    [[-130, -64, 75], [130, -64, 75], [-130, -64, 135], [130, -64, 135]].forEach(([bx, by, bz]) => {
       const bLeg = new THREE.Mesh(benchLegGeo, blackGlossMat);
       bLeg.position.set(bx, by, bz);
       bLeg.castShadow = true;
@@ -335,15 +354,14 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       (gltf) => {
         const model = gltf.scene;
 
-        // Compute Bounding Box to normalize scale perfectly
         const bbox = new THREE.Box3().setFromObject(model);
         const size = new THREE.Vector3();
         bbox.getSize(size);
         const maxDim = Math.max(size.x, size.y, size.z);
-        const scaleFactor = 105 / (maxDim || 1);
+        const scaleFactor = 110 / (maxDim || 1);
 
         model.scale.set(scaleFactor, scaleFactor, scaleFactor);
-        model.rotation.y = Math.PI; // Face the piano keys
+        model.rotation.y = Math.PI;
         model.position.set(0, 0, 0);
 
         model.traverse((child) => {
@@ -435,9 +453,9 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
     controls.minDistance = 40;
-    controls.maxDistance = 1200;
+    controls.maxDistance = 1400;
     controls.maxPolarAngle = Math.PI / 2 + 0.04;
-    controls.target.set(35, 18, -15);
+    controls.target.set(20, 15, -20);
 
     controls.addEventListener("start", () => {
       setViewAngle("custom");
@@ -517,26 +535,24 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     if (!s || viewAngle === "custom") return;
 
     if (viewAngle === "anime_side") {
-      s.cameraTargetPos = new THREE.Vector3(-160, 85, 140);
-      s.controlsTargetPos = new THREE.Vector3(35, 18, -15);
+      s.cameraTargetPos = new THREE.Vector3(-220, 110, 210);
+      s.controlsTargetPos = new THREE.Vector3(20, 15, -20);
     } else if (viewAngle === "cinematic") {
-      s.cameraTargetPos = new THREE.Vector3(240, 140, 220);
-      s.controlsTargetPos = new THREE.Vector3(-10, 15, -10);
+      s.cameraTargetPos = new THREE.Vector3(280, 160, 240);
+      s.controlsTargetPos = new THREE.Vector3(-10, 15, -20);
     } else if (viewAngle === "player") {
-      s.cameraTargetPos = new THREE.Vector3(0, 90, 145);
-      s.controlsTargetPos = new THREE.Vector3(0, 0, -15);
+      s.cameraTargetPos = new THREE.Vector3(0, 110, 180);
+      s.controlsTargetPos = new THREE.Vector3(0, 0, -20);
     } else if (viewAngle === "top") {
-      s.cameraTargetPos = new THREE.Vector3(0, 250, 30);
-      s.controlsTargetPos = new THREE.Vector3(0, 0, -15);
+      s.cameraTargetPos = new THREE.Vector3(0, 300, 30);
+      s.controlsTargetPos = new THREE.Vector3(0, 0, -20);
     }
   }, [viewAngle]);
 
-  // Frame Update: Keys Animation & Hands Kinematics
+  // Frame Update: Keys Animation & Hands Kinematics across 88 keys
   useEffect(() => {
     const s = stateRef.current;
     if (!s) return;
-
-    const centerOffset = keyCenterX(60, range.start);
 
     // 1. Keys Animation
     const activePitches = new Map(frame.active.map((n) => [n.pitch, n.hand]));
@@ -560,16 +576,20 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       }
     });
 
-    // 2. Avatar Gentle Sway
-    const activeCenterX = (frame.right.palmX + frame.left.palmX) / 2 - centerOffset;
+    // 2. Avatar Gentle Sway & Position Alignment
+    const activeRightPitch = frame.right.fingers[0]?.pitch ?? (frame.right.restPitches[2] ?? 60);
+    const activeLeftPitch = frame.left.fingers[0]?.pitch ?? (frame.left.restPitches[2] ?? 48);
+    const centerTargetX = (get3DKeyCenterX(activeRightPitch) + get3DKeyCenterX(activeLeftPitch)) / 2 - CENTER_88_OFFSET;
+
     const strikeMax = Math.max(frame.right.strikeImpact ?? 0, frame.left.strikeImpact ?? 0);
 
     if (s.pianistAvatarGroup) {
-      s.pianistAvatarGroup.rotation.z = -activeCenterX * 0.0004;
+      s.pianistAvatarGroup.position.x += (centerTargetX * 0.4 - s.pianistAvatarGroup.position.x) * 0.05;
+      s.pianistAvatarGroup.rotation.z = -centerTargetX * 0.0003;
       s.pianistAvatarGroup.rotation.x = -strikeMax * 0.02;
     }
 
-    // 3. Hand Kinematics
+    // 3. Hand Kinematics across 88 keys
     function updateHandPose(
       pose: HandFrame,
       handGroup: THREE.Group,
@@ -577,7 +597,15 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     ) {
       const hand = pose.hand;
       const isRh = hand === "R";
-      const targetPalmX = pose.palmX - centerOffset;
+      
+      const anchors = pose.fingers.length
+        ? pose.fingers
+        : pose.restPitches.map((pitch, i) => ({ finger: ((i + 1) as Finger), pitch }));
+      const homes = fingerHomePitches(hand, anchors);
+
+      const palmPitch = homes[2] ?? (isRh ? 64 : 48);
+      const targetPalmX = get3DKeyCenterX(palmPitch) - CENTER_88_OFFSET;
+
       const wristBounce = (pose.strikeImpact ?? 0) * 2.2;
       const palmZ = 20;
       const palmY = 9 - wristBounce;
@@ -585,18 +613,13 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       handGroup.position.set(targetPalmX, palmY, palmZ);
       handGroup.visible = pose.opacity > 0.05;
 
-      const anchors = pose.fingers.length
-        ? pose.fingers
-        : pose.restPitches.map((pitch, i) => ({ finger: ((i + 1) as Finger), pitch }));
-      const homes = fingerHomePitches(hand, anchors);
-
       const fNums: Finger[] = [1, 2, 3, 4, 5];
       fNums.forEach((f) => {
         const pressed = pose.fingers.find((p) => p.finger === f);
         const pitch = pressed ? pressed.pitch : homes[f - 1]!;
-        const fTargetX = keyCenterX(pitch, range.start) - centerOffset - targetPalmX;
+        const fTargetX = get3DKeyCenterX(pitch) - CENTER_88_OFFSET - targetPalmX;
         const defaultKx = (isRh ? 1 : -1) * KNUCKLE_DX[f];
-        const kx = defaultKx + (fTargetX - defaultKx) * 0.25;
+        const kx = defaultKx + (fTargetX - defaultKx) * 0.3;
 
         const fGroup = fingerMap.get(f);
         if (!fGroup) return;
@@ -610,9 +633,9 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     updateHandPose(frame.right, s.rhGroup, s.rhFingers);
     updateHandPose(frame.left, s.lhGroup, s.lhFingers);
 
-    // Gentle camera tracking
+    // Gentle camera tracking to active playing hand region
     if (viewAngle === "anime_side" && !s.cameraTargetPos) {
-      s.controls.target.x += (35 + activeCenterX * 0.12 - s.controls.target.x) * 0.04;
+      s.controls.target.x += (20 + centerTargetX * 0.2 - s.controls.target.x) * 0.04;
     }
   }, [frame, range, viewAngle]);
 
@@ -724,7 +747,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       </div>
 
       <div className="pointer-events-none absolute top-3 left-4 z-10 flex flex-col gap-0.5 text-[11px] font-medium tracking-wide text-muted-foreground">
-        <span className="text-white/90 font-semibold">✨ 3D 피아니스트 연주 & 그랜드 피아노</span>
+        <span className="text-white/90 font-semibold">✨ 88건반 콘서트 그랜드 피아노 & 피아니스트 연주</span>
         <span className="text-[10px] text-neutral-400">
           🖱️ 마우스 드래그: 360° 회전 · 휠: 확대/축소 · 우클릭: 이동
         </span>
