@@ -71,7 +71,37 @@ function buildHand(
   let moving = false;
   let opacity = idle ? 0.42 : 1;
   let motion: MotionKind | null = active[0]?.motion ?? null;
-  const fingers: PressedFinger[] = active.map((n) => ({ finger: n.finger, pitch: n.pitch }));
+
+  const fingers: PressedFinger[] = active.map((n) => {
+    const elapsed = Math.max(0, t - n.start);
+    const dur = Math.max(0.08, n.duration);
+
+    // Strike impulse in the first 0.09s of note onset
+    const attackDur = Math.min(0.09, dur * 0.35);
+    const releaseDur = Math.min(0.06, dur * 0.3);
+
+    let pressDepth = 1.0;
+    let strikeImpact = 0;
+
+    if (elapsed < attackDur) {
+      const p = elapsed / attackDur;
+      strikeImpact = 1 - p;
+      pressDepth = p < 0.45 ? (p / 0.45) * 1.25 : 1.25 - ((p - 0.45) / 0.55) * 0.25;
+    } else if (elapsed > dur - releaseDur) {
+      const p = (elapsed - (dur - releaseDur)) / releaseDur;
+      pressDepth = 1.0 - p * 0.75; // Lift up slightly before next stroke
+    }
+
+    return {
+      finger: n.finger,
+      pitch: n.pitch,
+      velocity: n.velocity,
+      strikeImpact,
+      pressDepth,
+    };
+  });
+
+  const strikeImpact = fingers.reduce((acc, f) => Math.max(acc, f.strikeImpact ?? 0), 0);
 
   let palmX: number;
   let nextPalmX: number | null = null;
@@ -121,6 +151,7 @@ function buildHand(
     palmX,
     nextPalmX,
     wristRotation,
+    strikeImpact,
     fingers,
     restPitches: restPitchesFrom(restSource.length ? restSource : mine.slice(0, 5)),
     motion,

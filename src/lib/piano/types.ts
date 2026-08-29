@@ -83,6 +83,9 @@ export interface Lesson {
 export interface PressedFinger {
   finger: Finger;
   pitch: number;
+  velocity?: number;
+  strikeImpact?: number; // 0.0 ~ 1.0 for onset strike pop
+  pressDepth?: number;   // 0.0 ~ 1.25 for physical key press depth
 }
 
 export interface HandFrame {
@@ -94,6 +97,7 @@ export interface HandFrame {
   palmX: number;
   nextPalmX: number | null;
   wristRotation: number;
+  strikeImpact: number;
   fingers: PressedFinger[];
   restPitches: number[];
   motion: MotionKind | null;

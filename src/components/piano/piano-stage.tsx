@@ -55,7 +55,9 @@ function HandSvg({
 }) {
   const hand = pose.hand;
   const keyBottom = KEY_TOP + WHITE_KEY_H;
-  const palmY = keyBottom + (hand === "R" ? 102 : 124);
+  // Wrist & palm slight drop bounce on strike
+  const wristBounce = ghost ? 0 : (pose.strikeImpact ?? 0) * 4.2;
+  const palmY = keyBottom + (hand === "R" ? 102 : 124) + wristBounce;
   const palmX = pose.palmX;
   const accent = hand === "R" ? "var(--color-rh)" : "var(--color-lh)";
   const fill = ghost ? "transparent" : "var(--color-skin)";
@@ -75,19 +77,20 @@ function HandSvg({
     const pressed = !ghost && pose.fingers.find((p) => p.finger === f);
     const pitch = pressed ? pressed.pitch : homes[f - 1]!;
     const black = isBlackKey(pitch);
-    const y = pressed
-      ? black
-        ? KEY_TOP + BLACK_KEY_H - 10
-        : keyBottom - 30
-      : black
-        ? KEY_TOP + BLACK_KEY_H + 6
-        : keyBottom - 8;
+    const restY = black ? KEY_TOP + BLACK_KEY_H + 6 : keyBottom - 8;
+    const fullPressY = black ? KEY_TOP + BLACK_KEY_H - 10 : keyBottom - 30;
+    const depth = pressed ? (pressed.pressDepth ?? 1) : 0;
+    const impact = pressed ? (pressed.strikeImpact ?? 0) : 0;
+    const y = restY + (fullPressY - restY) * Math.min(1.28, Math.max(0, depth * 1.04));
+
     return {
       f,
       pitch,
       x: keyCenterX(pitch, range.start),
       y,
       press: pressed ? 1 : 0,
+      depth,
+      impact,
     };
   });
 
@@ -142,13 +145,24 @@ function HandSvg({
             />
             {!ghost && (
               <>
+                {pressing && tip.impact > 0.04 && (
+                  <circle
+                    cx={tip.x}
+                    cy={tip.y}
+                    r={11 + (1 - tip.impact) * 11}
+                    fill="none"
+                    stroke={accent}
+                    strokeWidth={1.8 * tip.impact}
+                    opacity={tip.impact * 0.85}
+                  />
+                )}
                 <circle
                   cx={tip.x}
                   cy={tip.y}
-                  r={pressing ? 11 : 8.5}
+                  r={pressing ? 10.5 + tip.impact * 2.5 : 8.5}
                   fill={pressing ? accent : "var(--color-background)"}
                   stroke={accent}
-                  strokeWidth={1.6}
+                  strokeWidth={pressing ? 1.8 : 1.4}
                 />
                 <text
                   x={tip.x}
@@ -205,6 +219,8 @@ function Keyboard({ range, frame }: { range: KeyRange; frame: LessonFrame }) {
         const x = i * WHITE_KEY_W;
         const hand = active.get(p);
         const isNext = next.has(p) && !hand;
+        const isRh = hand === "R";
+        const isLh = hand === "L";
         return (
           <g key={p}>
             <rect
@@ -214,14 +230,14 @@ function Keyboard({ range, frame }: { range: KeyRange; frame: LessonFrame }) {
               height={WHITE_KEY_H}
               rx={3.5}
               fill={
-                hand === "R"
-                  ? "color-mix(in oklab, var(--color-rh) 58%, var(--color-key-white))"
-                  : hand === "L"
-                    ? "color-mix(in oklab, var(--color-lh) 58%, var(--color-key-white))"
+                isRh
+                  ? "color-mix(in oklab, var(--color-rh) 65%, var(--color-key-white))"
+                  : isLh
+                    ? "color-mix(in oklab, var(--color-lh) 65%, var(--color-key-white))"
                     : "var(--color-key-white)"
               }
-              stroke="var(--color-background)"
-              strokeWidth={1}
+              stroke={hand ? (isRh ? "var(--color-rh)" : "var(--color-lh)") : "var(--color-background)"}
+              strokeWidth={hand ? 1.6 : 1}
             />
             {isNext && (
               <rect
@@ -241,9 +257,10 @@ function Keyboard({ range, frame }: { range: KeyRange; frame: LessonFrame }) {
                 x={x + WHITE_KEY_W / 2}
                 y={y + 20}
                 textAnchor="middle"
-                fill="var(--color-background)"
-                opacity={hand ? 0.7 : 0.4}
+                fill={hand ? (isRh ? "var(--color-rh-fg)" : "var(--color-lh-fg)") : "var(--color-background)"}
+                opacity={hand ? 0.9 : 0.4}
                 fontSize={10}
+                fontWeight={hand ? 700 : 400}
                 fontFamily="var(--font-sans)"
               >
                 {pitchName(p)}
@@ -255,6 +272,8 @@ function Keyboard({ range, frame }: { range: KeyRange; frame: LessonFrame }) {
       {blacks.map((p) => {
         const x = keyCenterX(p, range.start) - BLACK_KEY_W / 2;
         const hand = active.get(p);
+        const isRh = hand === "R";
+        const isLh = hand === "L";
         return (
           <rect
             key={p}
@@ -264,14 +283,14 @@ function Keyboard({ range, frame }: { range: KeyRange; frame: LessonFrame }) {
             height={BLACK_KEY_H}
             rx={2.5}
             fill={
-              hand === "R"
-                ? "color-mix(in oklab, var(--color-rh) 50%, var(--color-key-black))"
-                : hand === "L"
-                  ? "color-mix(in oklab, var(--color-lh) 50%, var(--color-key-black))"
+              isRh
+                ? "color-mix(in oklab, var(--color-rh) 58%, var(--color-key-black))"
+                : isLh
+                  ? "color-mix(in oklab, var(--color-lh) 58%, var(--color-key-black))"
                   : "var(--color-key-black)"
             }
-            stroke="var(--color-background)"
-            strokeWidth={0.6}
+            stroke={hand ? (isRh ? "var(--color-rh)" : "var(--color-lh)") : "var(--color-background)"}
+            strokeWidth={hand ? 1.4 : 0.6}
           />
         );
       })}
