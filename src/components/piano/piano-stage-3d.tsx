@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import {
   BLACK_KEY_H,
   BLACK_KEY_W,
@@ -49,6 +50,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     renderer: THREE.WebGLRenderer;
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
+    controls: OrbitControls;
     keysMap: Map<number, { mesh: THREE.Mesh; initialY: number; isBlack: boolean }>;
     rhGroup: THREE.Group;
     lhGroup: THREE.Group;
@@ -65,9 +67,11 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     pianistHead: THREE.Group;
     rhModel?: THREE.Object3D;
     lhModel?: THREE.Object3D;
+    cameraTargetPos?: THREE.Vector3;
+    controlsTargetPos?: THREE.Vector3;
   } | null>(null);
 
-  const [viewAngle, setViewAngle] = useState<"cinematic" | "side" | "player" | "top">("cinematic");
+  const [viewAngle, setViewAngle] = useState<"custom" | "cinematic" | "side" | "player" | "top">("cinematic");
 
   useEffect(() => {
     const container = containerRef.current;
@@ -526,10 +530,24 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       },
     );
 
+    // OrbitControls for Free 360-degree Rotation, Zoom and Panning
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.minDistance = 60;
+    controls.maxDistance = 1400;
+    controls.maxPolarAngle = Math.PI / 2 + 0.05; // Do not go below floor
+    controls.target.set(-40, 30, -30);
+
+    controls.addEventListener("start", () => {
+      setViewAngle("custom");
+    });
+
     stateRef.current = {
       renderer,
       scene,
       camera,
+      controls,
       keysMap,
       rhGroup: rh.handGroup,
       lhGroup: lh.handGroup,
@@ -561,6 +579,25 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     let animId: number;
     const animate = () => {
       animId = requestAnimationFrame(animate);
+
+      // Smooth Camera & Target Lerp if transitioning
+      const s = stateRef.current;
+      if (s) {
+        if (s.cameraTargetPos) {
+          s.camera.position.lerp(s.cameraTargetPos, 0.08);
+          if (s.camera.position.distanceTo(s.cameraTargetPos) < 1) {
+            s.cameraTargetPos = undefined;
+          }
+        }
+        if (s.controlsTargetPos) {
+          s.controls.target.lerp(s.controlsTargetPos, 0.08);
+          if (s.controls.target.distanceTo(s.controlsTargetPos) < 1) {
+            s.controlsTargetPos = undefined;
+          }
+        }
+        s.controls.update();
+      }
+
       renderer.render(scene, camera);
     };
     animate();
@@ -568,6 +605,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     return () => {
       window.removeEventListener("resize", handleResize);
       cancelAnimationFrame(animId);
+      controls.dispose();
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
@@ -578,24 +616,20 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
   // Update Camera Angle Preset
   useEffect(() => {
     const s = stateRef.current;
-    if (!s) return;
+    if (!s || viewAngle === "custom") return;
 
     if (viewAngle === "cinematic") {
-      // Elegant 3/4 Side View showing pianist in rose dress, open lid, gold harp & full concert grand
-      s.camera.position.set(440, 220, 360);
-      s.camera.lookAt(-50, 40, -60);
+      s.cameraTargetPos = new THREE.Vector3(440, 220, 360);
+      s.controlsTargetPos = new THREE.Vector3(-50, 40, -60);
     } else if (viewAngle === "side") {
-      // Pure Profile Side View (like the user image)
-      s.camera.position.set(520, 160, 180);
-      s.camera.lookAt(-40, 30, 0);
+      s.cameraTargetPos = new THREE.Vector3(520, 160, 180);
+      s.controlsTargetPos = new THREE.Vector3(-40, 30, 0);
     } else if (viewAngle === "player") {
-      // 1st-person Pianist Eye View
-      s.camera.position.set(0, 165, 235);
-      s.camera.lookAt(0, 5, -20);
-    } else {
-      // Top-down Precision Practice View
-      s.camera.position.set(0, 380, 50);
-      s.camera.lookAt(0, 10, -20);
+      s.cameraTargetPos = new THREE.Vector3(0, 165, 235);
+      s.controlsTargetPos = new THREE.Vector3(0, 5, -20);
+    } else if (viewAngle === "top") {
+      s.cameraTargetPos = new THREE.Vector3(0, 380, 50);
+      s.controlsTargetPos = new THREE.Vector3(0, 10, -20);
     }
   }, [viewAngle]);
 
@@ -707,10 +741,10 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     updatePianistHandAndArm(frame.right, s.rhGroup, s.rhArm, s.rhElbow, s.rhFingers);
     updatePianistHandAndArm(frame.left, s.lhGroup, s.lhArm, s.lhElbow, s.lhFingers);
 
-    // Subtle camera tracking for cinematic realism
-    if (viewAngle === "cinematic") {
+    // Subtle camera tracking for cinematic realism (only when cinematic preset is active)
+    if (viewAngle === "cinematic" && !s.cameraTargetPos) {
       s.camera.position.x += (440 + activeCenterX * 0.35 - s.camera.position.x) * 0.05;
-      s.camera.lookAt(-50 + activeCenterX * 0.5, 40, -60);
+      s.controls.target.x += (-50 + activeCenterX * 0.5 - s.controls.target.x) * 0.05;
     }
   }, [frame, range, viewAngle]);
 
@@ -718,7 +752,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     <div className="relative flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
       {/* 3D Camera Angles Bar */}
       <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/85 px-2.5 py-1.5 shadow-md backdrop-blur-md">
-        <span className="text-[11px] font-semibold text-muted-foreground mr-1">🎥 카메라 앵글:</span>
+        <span className="text-[11px] font-semibold text-muted-foreground mr-1">🎥 카메라:</span>
         <button
           type="button"
           onClick={() => setViewAngle("cinematic")}
@@ -728,7 +762,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          시네마틱 (콘서트홀)
+          시네마틱
         </button>
         <button
           type="button"
@@ -750,7 +784,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          연주자 시점
+          연주자
         </button>
         <button
           type="button"
@@ -761,13 +795,22 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          탑다운 연습
+          탑다운
         </button>
+        {viewAngle === "custom" && (
+          <span className="rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 text-[10px] font-semibold">
+            자유 시점
+          </span>
+        )}
       </div>
 
-      <div className="pointer-events-none absolute top-3 left-4 z-10 text-[11px] font-medium tracking-wide text-muted-foreground">
-        ✨ 콘서트 그랜드 피아노 & 3D 피아니스트 실시간 연주
+      <div className="pointer-events-none absolute top-3 left-4 z-10 flex flex-col gap-0.5 text-[11px] font-medium tracking-wide text-muted-foreground">
+        <span className="text-white/90 font-semibold">✨ 3D 콘서트 그랜드 피아노 & 피아니스트</span>
+        <span className="text-[10px] text-neutral-400">
+          🖱️ 마우스 드래그: 360° 회전 · 휠: 확대/축소 · 우클릭: 이동
+        </span>
       </div>
+
       <div className="pointer-events-none absolute bottom-3 left-4 z-10 text-[11px] font-semibold tracking-wide text-lh">
         왼손 (Cyan)
       </div>
@@ -776,7 +819,7 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
       </div>
 
       {/* 3D WebGL Canvas Container */}
-      <div ref={containerRef} className="h-full w-full min-h-[300px] lg:min-h-[440px]" />
+      <div ref={containerRef} className="h-full w-full min-h-[300px] lg:min-h-[440px] cursor-grab active:cursor-grabbing" />
     </div>
   );
 }
