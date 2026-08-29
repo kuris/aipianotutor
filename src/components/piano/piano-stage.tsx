@@ -94,25 +94,34 @@ function HandSvg({
     };
   });
 
+  // Knuckle offsets relative to palm center for natural human hand width (~70px across knuckles)
+  const KNUCKLE_REST_DX: Record<Finger, number> = hand === "R"
+    ? { 1: -32, 2: -14, 3: 2, 4: 18, 5: 32 }
+    : { 1: 32, 2: 14, 3: -2, 4: -18, 5: -32 };
+
   const bases = tips.map((tip) => {
+    const defaultKnuckleX = palmX + KNUCKLE_REST_DX[tip.f];
+    // Gentle dynamic pull towards finger target, clamped to natural palm flexibility (max +-10px)
+    const pull = Math.max(-12, Math.min(12, (tip.x - defaultKnuckleX) * 0.25));
     const inward = hand === "R" ? 1 : -1;
-    const thumbPull = tip.f === 1 ? inward * 18 : 0;
+    const thumbBonus = tip.f === 1 ? inward * 4 : 0;
     return {
       f: tip.f,
-      x: palmX * 0.38 + tip.x * 0.62 + thumbPull,
+      x: defaultKnuckleX + pull + thumbBonus,
       y: palmY - KNUC_UP[tip.f],
     };
   });
 
-  const palmLeft = Math.min(...bases.map((b) => b.x)) - 10;
-  const palmRight = Math.max(...bases.map((b) => b.x)) + 10;
+  const palmWidthHalf = 44;
+  const palmLeft = palmX - palmWidthHalf;
+  const palmRight = palmX + palmWidthHalf;
   const wristY = palmY + 40;
-  const wristPath = capsule(palmX, palmY + 10, palmX, wristY, 20, 15);
+  const wristPath = capsule(palmX, palmY + 10, palmX, wristY, 22, 17);
   const palmPath = [
-    `M ${palmLeft + 10} ${palmY + 18}`,
-    `Q ${palmX} ${palmY + 24} ${palmRight - 10} ${palmY + 18}`,
-    `L ${palmRight} ${palmY - 4}`,
-    `Q ${palmX} ${palmY - 12} ${palmLeft} ${palmY - 4}`,
+    `M ${palmLeft + 6} ${palmY + 18}`,
+    `Q ${palmX} ${palmY + 24} ${palmRight - 6} ${palmY + 18}`,
+    `L ${palmRight + 4} ${palmY - 4}`,
+    `Q ${palmX} ${palmY - 12} ${palmLeft - 4} ${palmY - 4}`,
     "Z",
   ].join(" ");
 

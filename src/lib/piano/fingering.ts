@@ -153,6 +153,9 @@ interface PathNode {
 }
 
 export function assignHands(notes: ScoreNote[]): ScoreNote[] {
+  if (notes.length === 0) return [];
+
+  // Step 1: Initial assignment based on track averages and pitch baseline (Middle C = 60)
   const byTrack = new Map<number, ScoreNote[]>();
   for (const n of notes) {
     const arr = byTrack.get(n.track) ?? [];
@@ -161,23 +164,59 @@ export function assignHands(notes: ScoreNote[]): ScoreNote[] {
   }
   const tracks = [...byTrack.entries()].filter(([, ns]) => ns.length > 0);
 
-  if (tracks.length >= 2) {
-    const scored = tracks.map(([id, ns]) => ({
-      id,
-      mean: avg(ns.map((n) => n.pitch)),
-    }));
-    scored.sort((a, b) => b.mean - a.mean);
-    const rh = new Set(scored.filter((_, i) => i < Math.ceil(scored.length / 2)).map((s) => s.id));
-    return notes.map((n) => ({
-      ...n,
-      hand: n.hand ?? (rh.has(n.track) ? "R" : "L"),
-    }));
-  }
-
-  return notes.map((n) => {
+  const initialAssigned: ScoreNote[] = notes.map((n) => {
     if (n.hand) return n;
+    if (tracks.length >= 2) {
+      const trackNotes = byTrack.get(n.track) ?? [];
+      const trackMean = avg(trackNotes.map((x) => x.pitch));
+      // Track mostly bass (< 56) or mostly treble (> 64)
+      if (trackMean < 56) return { ...n, hand: "L" };
+      if (trackMean > 64) return { ...n, hand: "R" };
+    }
+    // Default pitch split at Middle C (60)
     return { ...n, hand: n.pitch >= 60 ? "R" : "L" };
   });
+
+  // Step 2: Ergonomic span correction for simultaneous chords / overlapping notes
+  // Human hand comfortable max span is ~12-14 semitones (approx 1 octave to 9th).
+  const onsets = groupOnsets(initialAssigned, 0.08);
+  const result: ScoreNote[] = [];
+
+  for (const group of onsets) {
+    const lh = group.filter((n) => n.hand === "L").sort((a, b) => a.pitch - b.pitch);
+    const rh = group.filter((n) => n.hand === "R").sort((a, b) => a.pitch - b.pitch);
+
+    // If LH span > 14 semitones (e.g. F2 to F4), split higher notes to RH or keep reasonable span
+    if (lh.length >= 2) {
+      const minP = lh[0]!.pitch;
+      const maxP = lh[lh.length - 1]!.pitch;
+      if (maxP - minP > 14) {
+        for (const n of lh) {
+          // If note is around or above middle C, or too far from bass root, hand over to RH
+          if (n.pitch >= 58 || n.pitch - minP > 14) {
+            n.hand = "R";
+          }
+        }
+      }
+    }
+
+    // If RH span > 14 semitones, split lower notes to LH
+    if (rh.length >= 2) {
+      const minP = rh[0]!.pitch;
+      const maxP = rh[rh.length - 1]!.pitch;
+      if (maxP - minP > 14) {
+        for (const n of rh) {
+          if (n.pitch < 60 || maxP - n.pitch > 14) {
+            n.hand = "L";
+          }
+        }
+      }
+    }
+
+    result.push(...group);
+  }
+
+  return result.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
 }
 
 export function fingerHand(notes: ScoreNote[], hand: HandId): FingeredNote[] {
