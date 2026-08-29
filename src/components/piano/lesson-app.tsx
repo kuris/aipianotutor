@@ -51,6 +51,23 @@ export function LessonApp() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [cinemaMode]);
 
+  const [selectedCategory, setSelectedCategory] = useState<"all" | "pop_ost" | "classic" | "practice">("all");
+  const [selectedLevel, setSelectedLevel] = useState<"all" | "beginner" | "intermediate" | "advanced">("all");
+
+  const filteredSongs = useMemo(() => {
+    return DEMO_SONGS.filter((s) => {
+      const matchCat = selectedCategory === "all" || s.category === selectedCategory;
+      const matchLvl = selectedLevel === "all" || s.level === selectedLevel;
+      return matchCat && matchLvl;
+    });
+  }, [selectedCategory, selectedLevel]);
+
+  const levelLabels: Record<string, { label: string; color: string }> = {
+    beginner: { label: "입문", color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" },
+    intermediate: { label: "중급", color: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30" },
+    advanced: { label: "고급", color: "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30" },
+  };
+
   const measureCount = lesson.measures.length;
   const progressLabel = useMemo(() => {
     const b = player.frame.beat;
@@ -317,49 +334,114 @@ export function LessonApp() {
         </div>
       )}
 
-      <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col lg:grid lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1700px] flex-1 flex-col lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="flex shrink-0 flex-col gap-3 border-border p-3 lg:min-h-0 lg:overflow-y-auto lg:border-r">
-          <section className="hidden rounded-lg border border-border bg-card p-3 lg:block">
-            <p className="text-[11px] tracking-wide text-muted-foreground uppercase">화면 읽기</p>
-            <ul className="mt-2 space-y-2 text-[13px] leading-snug">
-              <li className="flex gap-2">
-                <span className="mt-1.5 size-2 shrink-0 rounded-full bg-rh" />
-                오른손 (Coral)
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-1.5 size-2 shrink-0 rounded-full bg-lh" />
-                왼손 (Cyan)
-              </li>
-              <li className="flex gap-2">
-                <Hand className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-                끝 숫자 1=엄지 · 5=새끼
-              </li>
-            </ul>
+          {/* Category Filter Tabs */}
+          <section className="rounded-lg border border-border bg-card p-2.5">
+            <p className="px-1 pb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">장르 카테고리</p>
+            <div className="grid grid-cols-2 gap-1">
+              {[
+                { id: "all", label: "전체" },
+                { id: "pop_ost", label: "🍿 팝 & OST" },
+                { id: "classic", label: "🎻 클래식" },
+                { id: "practice", label: "🎹 기초연습" },
+              ].map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(c.id as any)}
+                  className={cn(
+                    "rounded-md px-2 py-1.5 text-xs font-medium transition-all text-center",
+                    selectedCategory === c.id
+                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                      : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Level Filter Pills */}
+            <p className="px-1 pt-3 pb-1.5 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">난이도 레벨</p>
+            <div className="flex gap-1">
+              {[
+                { id: "all", label: "전체" },
+                { id: "beginner", label: "입문" },
+                { id: "intermediate", label: "중급" },
+                { id: "advanced", label: "고급" },
+              ].map((lvl) => (
+                <button
+                  key={lvl.id}
+                  type="button"
+                  onClick={() => setSelectedLevel(lvl.id as any)}
+                  className={cn(
+                    "flex-1 rounded-md px-1.5 py-1 text-[11px] font-medium transition-all text-center",
+                    selectedLevel === lvl.id
+                      ? "bg-foreground text-background font-bold"
+                      : "bg-muted/40 text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {lvl.label}
+                </button>
+              ))}
+            </div>
           </section>
 
+          {/* Filtered Song List */}
           <section className="rounded-lg border border-border bg-card p-2">
-            <p className="px-2 pb-1.5 text-[11px] tracking-wide text-muted-foreground uppercase">데모 레슨</p>
+            <div className="flex items-center justify-between px-2 pb-2">
+              <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">곡 목록</span>
+              <span className="text-[10px] text-muted-foreground">{filteredSongs.length}곡</span>
+            </div>
             <div className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
-              {DEMO_SONGS.map((s) => {
+              {filteredSongs.map((s) => {
                 const active = lesson.id === s.id;
+                const lvlInfo = levelLabels[s.level] || levelLabels.beginner;
                 return (
                   <button
                     key={s.id}
                     type="button"
                     onClick={() => setLesson(buildDemoLesson(s))}
                     className={cn(
-                      "min-w-[148px] rounded-md border px-2.5 py-2 text-left transition-colors duration-150 lg:min-w-0",
+                      "min-w-[180px] rounded-lg border p-2.5 text-left transition-all duration-150 lg:min-w-0",
                       active
-                        ? "border-primary/40 bg-muted"
-                        : "border-transparent hover:bg-muted/60",
+                        ? "border-amber-500/50 bg-amber-500/10 shadow-xs"
+                        : "border-transparent hover:border-border hover:bg-muted/50",
                     )}
                   >
-                    <p className="text-sm font-medium">{s.titleKo}</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{s.teach}</p>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className={cn("text-sm font-semibold truncate", active ? "text-amber-500 dark:text-amber-400" : "text-foreground")}>
+                        {s.titleKo}
+                      </p>
+                      <span className={cn("shrink-0 rounded border px-1.5 py-0.2 text-[10px] font-medium", lvlInfo.color)}>
+                        {lvlInfo.label}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground truncate">{s.composer}</p>
+                    <p className="mt-1 text-[10px] text-neutral-400 line-clamp-1">{s.teach}</p>
                   </button>
                 );
               })}
             </div>
+          </section>
+
+          <section className="hidden rounded-lg border border-border bg-card p-3 lg:block">
+            <p className="text-[11px] tracking-wide text-muted-foreground uppercase">화면 가이드</p>
+            <ul className="mt-2 space-y-2 text-[12px] leading-snug">
+              <li className="flex items-center gap-2">
+                <span className="size-2 shrink-0 rounded-full bg-rh" />
+                오른손 (Coral)
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="size-2 shrink-0 rounded-full bg-lh" />
+                왼손 (Cyan)
+              </li>
+              <li className="flex items-center gap-2">
+                <Hand className="size-3.5 shrink-0 text-muted-foreground" />
+                숫자 1=엄지 · 5=새끼
+              </li>
+            </ul>
           </section>
         </aside>
 
