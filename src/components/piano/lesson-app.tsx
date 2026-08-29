@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { PianoStage } from "@/components/piano/piano-stage";
+import { PianoStage3D } from "@/components/piano/piano-stage-3d";
 import { StaffView } from "@/components/piano/staff-view";
 import { useLessonPlayer, SPEEDS } from "@/hooks/use-lesson-player";
 import { buildDemoLesson, buildLessonFromNotes } from "@/lib/piano/lesson";
@@ -29,6 +30,7 @@ function loadInitial(): Lesson {
 
 export function LessonApp() {
   const [lesson, setLesson] = useState<Lesson>(loadInitial);
+  const [stageMode, setStageMode] = useState<"3d" | "2d">("3d");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -176,6 +178,33 @@ export function LessonApp() {
                 </Button>
               ))}
             </div>
+            <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5">
+              <button
+                type="button"
+                onClick={() => setStageMode("3d")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  stageMode === "3d"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                ✨ 3D 손모양
+              </button>
+              <button
+                type="button"
+                onClick={() => setStageMode("2d")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  stageMode === "2d"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                2D 평면
+              </button>
+            </div>
+
             <input
               ref={fileRef}
               type="file"
@@ -207,15 +236,11 @@ export function LessonApp() {
             <ul className="mt-2 space-y-2 text-[13px] leading-snug">
               <li className="flex gap-2">
                 <span className="mt-1.5 size-2 shrink-0 rounded-full bg-rh" />
-                진한 손 = 지금 연주
+                오른손 (Coral)
               </li>
               <li className="flex gap-2">
-                <span className="mt-1.5 size-2 shrink-0 rounded-full bg-lh/70" />
-                흐린 손 = 다음 자리 대기
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-2 h-px w-4 shrink-0 border-t border-dashed border-muted-foreground" />
-                점선 = 손 전체 이동
+                <span className="mt-1.5 size-2 shrink-0 rounded-full bg-lh" />
+                왼손 (Cyan)
               </li>
               <li className="flex gap-2">
                 <Hand className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
@@ -268,7 +293,11 @@ export function LessonApp() {
           <StaffView lesson={lesson} frame={player.frame} />
 
           <div className="min-h-0 flex-1">
-            <PianoStage frame={player.frame} range={player.range} />
+            {stageMode === "3d" ? (
+              <PianoStage3D frame={player.frame} range={player.range} />
+            ) : (
+              <PianoStage frame={player.frame} range={player.range} />
+            )}
           </div>
 
           <section className="shrink-0 rounded-lg border border-border bg-card px-4 py-2">
