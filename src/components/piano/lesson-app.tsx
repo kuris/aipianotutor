@@ -1,15 +1,18 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Clapperboard,
   Hand,
   Loader2,
+  Maximize2,
   Pause,
   Play,
   Repeat,
   SkipForward,
   Square,
   Upload,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,11 +34,22 @@ function loadInitial(): Lesson {
 export function LessonApp() {
   const [lesson, setLesson] = useState<Lesson>(loadInitial);
   const [stageMode, setStageMode] = useState<"3d" | "2d">("3d");
+  const [cinemaMode, setCinemaMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const player = useLessonPlayer(lesson);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && cinemaMode) {
+        setCinemaMode(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [cinemaMode]);
 
   const measureCount = lesson.measures.length;
   const progressLabel = useMemo(() => {
@@ -205,6 +219,18 @@ export function LessonApp() {
               </button>
             </div>
 
+            <Button
+              variant="default"
+              className="bg-amber-600 hover:bg-amber-500 text-white font-semibold shadow-sm"
+              onClick={() => {
+                setStageMode("3d");
+                setCinemaMode(true);
+              }}
+            >
+              <Clapperboard className="size-4" />
+              시네마 모드
+            </Button>
+
             <input
               ref={fileRef}
               type="file"
@@ -228,6 +254,68 @@ export function LessonApp() {
           </div>
         </div>
       </header>
+
+      {/* Fullscreen Cinema Mode Overlay */}
+      {cinemaMode && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
+          {/* Top Bar with Song Info & Exit */}
+          <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent p-6">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-amber-400 font-semibold">Concert Grand Cinema</p>
+              <h2 className="font-display text-2xl tracking-tight text-white">{lesson.titleKo}</h2>
+              <p className="text-sm text-neutral-300">{lesson.composer}</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCinemaMode(false)}
+              className="border-neutral-700 bg-black/60 text-neutral-200 hover:bg-neutral-800 hover:text-white"
+            >
+              <X className="size-4 mr-1.5" />
+              나가기 (ESC)
+            </Button>
+          </div>
+
+          {/* Main 3D Concert Stage */}
+          <div className="h-full w-full flex-1">
+            <PianoStage3D frame={player.frame} range={player.range} />
+          </div>
+
+          {/* Subtitle & Floating Cinematic Controls */}
+          <div className="absolute bottom-0 left-0 right-0 z-30 flex flex-col items-center gap-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent pb-8 pt-12 px-6">
+            {/* Cinematic Subtitle Quote */}
+            <p className="font-display text-2xl md:text-3xl font-light tracking-wide text-white/90 drop-shadow-md text-center">
+              Enjoy the music!
+            </p>
+
+            {/* Minimalist Floating Player Controls */}
+            <div className="flex w-full max-w-2xl items-center gap-4 rounded-full border border-white/10 bg-black/70 px-5 py-2.5 shadow-2xl backdrop-blur-xl">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-white hover:bg-white/10"
+                onClick={() => (player.playing ? player.pause() : player.play())}
+              >
+                {player.playing ? <Pause className="size-4" /> : <Play className="size-4" />}
+              </Button>
+              <span className="text-xs tabular-nums text-neutral-400">
+                {player.time.toFixed(1)}s
+              </span>
+              <Slider
+                min={0}
+                max={Math.max(0.1, lesson.duration)}
+                step={0.05}
+                value={[player.time]}
+                onValueChange={(v) => player.seek(v[0] ?? 0)}
+                className="flex-1"
+              />
+              <span className="text-xs tabular-nums text-neutral-400">
+                {lesson.duration.toFixed(1)}s
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col lg:grid lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="flex shrink-0 flex-col gap-3 border-border p-3 lg:min-h-0 lg:overflow-y-auto lg:border-r">

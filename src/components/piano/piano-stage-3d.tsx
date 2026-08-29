@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   BLACK_KEY_H,
   BLACK_KEY_W,
@@ -62,6 +63,8 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
     pianistBody: THREE.Group;
     pianistTorso: THREE.Mesh;
     pianistHead: THREE.Group;
+    rhModel?: THREE.Object3D;
+    lhModel?: THREE.Object3D;
   } | null>(null);
 
   const [viewAngle, setViewAngle] = useState<"cinematic" | "side" | "player" | "top">("cinematic");
@@ -479,6 +482,49 @@ export function PianoStage3D({ frame, range }: PianoStage3DProps) {
 
     const rh = createPianistArm("R");
     const lh = createPianistArm("L");
+
+    // Load Realistic Sketchfab 3D Hand Model
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load(
+      "/models/female_hand.glb",
+      (gltf) => {
+        const baseModel = gltf.scene;
+        baseModel.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            const mat = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
+            if (mat) {
+              mat.roughness = 0.48;
+              mat.metalness = 0.05;
+            }
+          }
+        });
+
+        // Right Hand Instance
+        const rhModel = baseModel.clone();
+        rhModel.scale.set(16, 16, 16);
+        rhModel.position.set(0, -6, 2);
+        rhModel.rotation.set(-0.2, Math.PI, 0);
+        rh.handGroup.add(rhModel);
+
+        // Left Hand Instance (Mirrored X)
+        const lhModel = baseModel.clone();
+        lhModel.scale.set(-16, 16, 16);
+        lhModel.position.set(0, -6, 2);
+        lhModel.rotation.set(-0.2, Math.PI, 0);
+        lh.handGroup.add(lhModel);
+
+        if (stateRef.current) {
+          stateRef.current.rhModel = rhModel;
+          stateRef.current.lhModel = lhModel;
+        }
+      },
+      undefined,
+      (err) => {
+        console.warn("Sketchfab hand GLB fallback to procedural 3D hand:", err);
+      },
+    );
 
     stateRef.current = {
       renderer,
