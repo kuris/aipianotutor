@@ -44,7 +44,7 @@ export class PianoSynth {
   private wetGain: GainNode | null = null;
   private reverbNode: ConvolverNode | null = null;
   private sampleBuffers = new Map<number, AudioBuffer>();
-  private loadingSamples = new Set<number>();
+  private loadingPromises = new Map<number, Promise<AudioBuffer | null>>();
   private voices = new Map<number, { stop: (t: number) => void }>();
   private nextVoice = 0;
 
@@ -104,27 +104,50 @@ export class PianoSynth {
     return convolver;
   }
 
-  private async loadSample(pitch: number): Promise<AudioBuffer | null> {
+  async loadSample(pitch: number): Promise<AudioBuffer | null> {
     if (this.sampleBuffers.has(pitch)) return this.sampleBuffers.get(pitch)!;
-    if (this.loadingSamples.has(pitch) || !this.ctx) return null;
+    if (this.loadingPromises.has(pitch)) return this.loadingPromises.get(pitch)!;
+    if (!this.ctx) return null;
 
     const sampleName = SAMPLE_MAP[pitch];
     if (!sampleName) return null;
 
-    this.loadingSamples.add(pitch);
-    try {
-      const res = await fetch(`${BASE_URL}${sampleName}.mp3`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const arrayBuf = await res.arrayBuffer();
-      if (!this.ctx) return null;
-      const audioBuf = await this.ctx.decodeAudioData(arrayBuf);
-      this.sampleBuffers.set(pitch, audioBuf);
-      return audioBuf;
-    } catch {
-      return null;
-    } finally {
-      this.loadingSamples.delete(pitch);
+    const promise = (async () => {
+      try {
+        const res = await fetch(`${BASE_URL}${sampleName}.mp3`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const arrayBuf = await res.arrayBuffer();
+        if (!this.ctx) return null;
+        const audioBuf = await this.ctx.decodeAudioData(arrayBuf);
+        this.sampleBuffers.set(pitch, audioBuf);
+        return audioBuf;
+      } catch {
+        return null;
+      } finally {
+        this.loadingPromises.delete(pitch);
+      }
+    })();
+
+    this.loadingPromises.set(pitch, promise);
+    return promise;
+  }
+
+  async loadSamplesForPitches(pitches: number[]): Promise<void> {
+    if (!this.ctx) await this.resume();
+    const neededSamples = new Set<number>();
+    for (const p of pitches) {
+      neededSamples.add(this.findClosestSamplePitch(p));
     }
+    const promises = Array.from(neededSamples).map((sp) => this.loadSample(sp));
+    await Promise.all(promises);
+  }
+
+  isReadyForPitches(pitches: number[]): boolean {
+    for (const p of pitches) {
+      const sp = this.findClosestSamplePitch(p);
+      if (!this.sampleBuffers.has(sp)) return false;
+    }
+    return true;
   }
 
   private preloadCommonSamples(): void {

@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import {
   Hand,
+  Loader2,
   Pause,
   Play,
   Repeat,
@@ -134,11 +135,26 @@ export function LessonApp() {
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button
               size="lg"
-              className="min-w-28"
+              className="min-w-32"
+              disabled={player.loadingAudio}
               onClick={() => (player.playing ? player.pause() : player.play())}
             >
-              {player.playing ? <Pause /> : <Play />}
-              {player.playing ? "일시정지" : "재생"}
+              {player.loadingAudio ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  음원 로딩 중...
+                </>
+              ) : player.playing ? (
+                <>
+                  <Pause />
+                  일시정지
+                </>
+              ) : (
+                <>
+                  <Play />
+                  재생
+                </>
+              )}
             </Button>
             <Button variant="outline" size="icon" aria-label="처음으로" onClick={player.stop}>
               <Square />

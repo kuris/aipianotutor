@@ -8,6 +8,7 @@ export const SPEEDS = [0.25, 0.5, 0.75, 1] as const;
 
 export function useLessonPlayer(lesson: Lesson) {
   const [playing, setPlaying] = useState(false);
+  const [loadingAudio, setLoadingAudio] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [time, setTime] = useState(0);
   const [loopEnabled, setLoopEnabled] = useState(false);
@@ -54,6 +55,13 @@ export function useLessonPlayer(lesson: Lesson) {
     originRef.current = null;
     scheduledRef.current.clear();
     synthRef.current?.stopAll();
+
+    // Background preload soundfont samples for the active song
+    if (lesson.notes.length > 0) {
+      const synth = getSynth();
+      const pitches = lesson.notes.map((n) => n.pitch);
+      synth.loadSamplesForPitches(pitches).catch(() => {});
+    }
   }, [lesson.id]);
 
   const scheduleFrom = useCallback((lessonTime: number, audioT: number, rate: number) => {
@@ -142,7 +150,17 @@ export function useLessonPlayer(lesson: Lesson) {
   );
 
   const play = useCallback(async () => {
-    await getSynth().resume();
+    const synth = getSynth();
+    await synth.resume();
+    const pitches = lessonRef.current.notes.map((n) => n.pitch);
+    if (!synth.isReadyForPitches(pitches)) {
+      setLoadingAudio(true);
+      try {
+        await synth.loadSamplesForPitches(pitches);
+      } finally {
+        setLoadingAudio(false);
+      }
+    }
     if (timeRef.current >= lessonRef.current.duration - 0.05) setTime(0);
     setPlaying(true);
   }, []);
@@ -175,6 +193,7 @@ export function useLessonPlayer(lesson: Lesson) {
 
   return {
     playing,
+    loadingAudio,
     speed,
     setSpeed,
     time,
