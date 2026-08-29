@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "HandPath",
+      "hasCanvas": false,
+      "bodyTextLen": 722,
+      "bodyTextHash": "ae62f163cf3d57d65f00b77e6f566b1589392874ac1ded9e787efed6f9becba8",
+      "bodyTextPrefix": "HandPath 음표가 아니라, 손을 어떻게 움직여야 하는지를 보여 줍니다 재생 다음 음 25% 50% 75% 10",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "HandPath",
+      "hasCanvas": false,
+      "bodyTextLen": 624,
+      "bodyTextHash": "ead8bddc288f3401dd496f3d9565d51f28dccccbf820263917d2edba92bf52d9",
+      "bodyTextPrefix": "HandPath 재생 다음 음 25% 50% 75% 100% MIDI 올리기 데모 레슨 반짝반짝 작은 별 반대편 손",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
